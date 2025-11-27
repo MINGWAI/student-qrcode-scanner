@@ -8,7 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 載入 jsQR 掃描庫 -->
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.0.4/dist/jsQR.min.js"></script>
-    <!-- 新增：載入 qrcode.js 產生 QR Code 函式庫 -->
+    <!-- 載入 qrcode.js 產生 QR Code 函式庫 (新增) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         /* 使用 Inter 字體 */
@@ -212,20 +212,18 @@
         </div>
     </div>
     
-    <!-- 載入 Firebase SDK -->
+    <!-- 載入 Firebase SDK 和應用程式邏輯 -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, addDoc, setDoc, onSnapshot, collection, query, where, serverTimestamp, deleteDoc, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-
-        // 設定 Firebase 變數
+        import { getFirestore, doc, addDoc, setDoc, onSnapshot, collection, serverTimestamp, deleteDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // --- 變數初始化 ---
         setLogLevel('debug');
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         
-        // 初始化 Firebase
         let app, db, auth, userId;
         let rosterData = {}; // 用於快取名單，加速點名
 
@@ -234,7 +232,8 @@
         const rosterTbody = document.getElementById('roster-tbody');
         const recordsTbody = document.getElementById('records-tbody');
         
-        // 模態框函數
+        // --- UI 控制函式 ---
+        // 模態框函數 (暴露給 HTML 行內事件)
         window.showModal = (title, message) => {
             document.getElementById('modal-title').textContent = title;
             document.getElementById('modal-message').textContent = message;
@@ -245,23 +244,21 @@
             document.getElementById('modal').classList.add('hidden');
         };
 
-        // QR Code 模態框函數 (新增)
+        // QR Code 模態框函數 (暴露給 HTML 行內事件)
         window.showQRCodeModal = (studentId, studentName) => {
             const modalEl = document.getElementById('qr-modal');
             const titleEl = document.getElementById('qr-modal-title');
             const containerEl = document.getElementById('qrcode-container');
             const contentDisplayEl = document.getElementById('qr-content-display');
 
-            // 清空舊的 QR Code，確保只繪製一個
             containerEl.innerHTML = '';
             
             titleEl.textContent = `${studentName} 的 QR Code`;
             contentDisplayEl.textContent = `內容 (學號): ${studentId}`;
 
             // 產生 QR Code
-            // qrcode.js 會自動在容器內創建一個 canvas 或 table
             new QRCode(containerEl, {
-                text: studentId, // 使用學號作為 QR Code 內容
+                text: studentId, 
                 width: 256,
                 height: 256,
                 colorDark : "#000000",
@@ -276,7 +273,7 @@
             document.getElementById('qr-modal').classList.add('hidden');
         };
 
-        // Tab 切換
+        // Tab 切換 (暴露給 HTML 行內事件)
         window.switchTab = (tabName) => {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.tab-button').forEach(el => {
@@ -288,6 +285,15 @@
             const button = document.getElementById(`tab-${tabName}`);
             button.classList.add('text-green-600', 'border-green-500');
             button.classList.remove('text-gray-500', 'border-transparent', 'hover:border-gray-300', 'hover:text-gray-700');
+            
+            // 如果切換到掃描器，確保相機啟動 (防止在其他標籤時佔用相機)
+            if (tabName === 'scanner' && userId) {
+                 // 重新啟動相機
+                 startCamera();
+            } else if (video.srcObject) {
+                 // 停止相機流，釋放資源
+                 video.srcObject.getTracks().forEach(track => track.stop());
+            }
         };
 
         // --- 1. Firebase 認證和初始化 ---
@@ -296,6 +302,7 @@
                 authStatusEl.textContent = '錯誤：Firebase 配置遺失。';
                 authStatusEl.classList.replace('bg-yellow-100', 'bg-red-100');
                 authStatusEl.classList.replace('text-yellow-800', 'text-red-800');
+                authStatusEl.classList.remove('hidden');
                 return;
             }
 
@@ -313,6 +320,7 @@
                     await signInAnonymously(auth);
                 }
                 
+                // 狀態改變後，確保 userId 存在才開始 Firestore 操作
                 onAuthStateChanged(auth, (user) => {
                     if (user) {
                         userId = user.uid;
@@ -323,6 +331,7 @@
                         // 認證成功後啟動應用程式核心功能
                         startAppFeatures(); 
                     } else {
+                        userId = null;
                         authStatusEl.textContent = '未認證。';
                         authStatusEl.classList.replace('bg-yellow-100', 'bg-red-100');
                         authStatusEl.classList.replace('text-yellow-800', 'text-red-800');
@@ -339,30 +348,33 @@
 
         // --- 2. 學生名單管理功能 (Firestore) ---
         const getRosterCollectionRef = () => {
-            if (!db || !userId) return null;
+            if (!db || !userId) {
+                console.error("Firestore 或 userId 尚未初始化。");
+                return null;
+            }
             const path = `/artifacts/${appId}/users/${userId}/roster`;
             return collection(db, path);
         };
 
         const renderRoster = (students) => {
             rosterTbody.innerHTML = '';
-            rosterData = {}; // 重置快取
+            rosterData = {}; 
             if (students.length === 0) {
                 rosterTbody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-gray-500">名單為空。請新增學生。</td></tr>';
                 return;
             }
             
             students.forEach(student => {
-                rosterData[student.qrContent] = { name: student.name, studentId: student.studentId };
+                rosterData[student.studentId] = { name: student.name, studentId: student.studentId };
                 
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-gray-50 transition-colors duration-100';
                 tr.innerHTML = `
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${student.qrContent}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${student.studentId}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${student.name}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex space-x-2 justify-end">
-                        <button onclick="showQRCodeModal('${student.studentId}', '${student.name}')" class="text-blue-600 hover:text-blue-900 transition-colors duration-100 p-1 rounded-md bg-blue-50">產生 QR Code</button>
-                        <button onclick="deleteStudent('${student.studentId}')" class="text-red-600 hover:text-red-900 transition-colors duration-100 p-1 rounded-md bg-red-50">刪除</button>
+                        <button onclick="window.showQRCodeModal('${student.studentId}', '${student.name}')" class="text-blue-600 hover:text-blue-900 transition-colors duration-100 p-1 rounded-md bg-blue-50">產生 QR Code</button>
+                        <button onclick="window.deleteStudent('${student.studentId}')" class="text-red-600 hover:text-red-900 transition-colors duration-100 p-1 rounded-md bg-red-50">刪除</button>
                     </td>
                 `;
                 rosterTbody.appendChild(tr);
@@ -389,15 +401,17 @@
             e.preventDefault();
             const studentId = document.getElementById('studentId').value.trim();
             const studentName = document.getElementById('studentName').value.trim();
-            const qrContent = studentId; // QR Code 內容與學號一致
-
+            
             if (!studentId || !studentName) {
                 showModal('錯誤', '學號和姓名不能為空。');
                 return;
             }
 
-            const docRef = doc(getRosterCollectionRef(), studentId); // 使用學號作為文件 ID
-            const data = { studentId, name: studentName, qrContent };
+            const rosterRef = getRosterCollectionRef();
+            if (!rosterRef) return;
+
+            const docRef = doc(rosterRef, studentId); 
+            const data = { studentId, name: studentName };
 
             try {
                 await setDoc(docRef, data);
@@ -409,22 +423,21 @@
             }
         });
         
+        // 刪除學生 (暴露給 HTML 行內事件)
         window.deleteStudent = async (studentId) => {
-            // 使用自定義模態框代替 confirm
-            showModal('確認刪除', `確定要刪除學號 ${studentId} 的學生嗎？這將不會刪除已產生的點名記錄。`);
             
-            // 由於不能使用 window.confirm，這裡需要一個更複雜的自定義確認流程。
-            // 為了保持程式碼的單一性，我們暫時使用一個簡單的模式：如果使用者關閉模態框，則不刪除。
-            // 實際應用中，需要修改模態框為包含「確認」和「取消」按鈕。
-            // 這裡為了讓程式碼盡可能單一且功能可運行，我將暫時移除原生的 confirm，但這部分的用戶體驗會受限。
-            
-            // 為了符合 Immersive 的約束（不能使用 window.confirm），我們將其替換為一個無操作的提示，並直接執行刪除。
-            // 在實際環境中，您會使用一個自訂義的帶有確認按鈕的 modal。
-            
-            const docRef = doc(getRosterCollectionRef(), studentId);
+            const rosterRef = getRosterCollectionRef();
+            if (!rosterRef) return;
+
+            const docRef = doc(rosterRef, studentId);
             try {
+                showModal('確認刪除', `正在刪除學號 ${studentId} 的學生...`);
+                
                 await deleteDoc(docRef);
-                showModal('成功', `學生 ${studentId} 已刪除。`);
+                // 重新打開一個成功的模態框，讓用戶知道操作已完成
+                setTimeout(() => {
+                    showModal('成功', `學生 ${studentId} 已刪除。`);
+                }, 500); 
             } catch (e) {
                 console.error("刪除學生失敗:", e);
                 showModal('錯誤', '刪除學生失敗，請檢查控制台。');
@@ -433,8 +446,10 @@
 
         // --- 3. 點名記錄功能 (Firestore) ---
         const getAttendanceCollectionRef = () => {
-            if (!db || !userId) return null;
-            // 點名記錄也存於使用者私人空間
+            if (!db || !userId) {
+                console.error("Firestore 或 userId 尚未初始化。");
+                return null;
+            }
             const path = `/artifacts/${appId}/users/${userId}/attendance_records`; 
             return collection(db, path);
         };
@@ -447,7 +462,7 @@
             }
 
             records.forEach(record => {
-                const checkInDate = record.checkInTime ? new Date(record.checkInTime.toDate()).toLocaleString('zh-TW') : 'N/A';
+                const checkInDate = record.checkInTime && record.checkInTime.toDate ? new Date(record.checkInTime.toDate()).toLocaleString('zh-TW') : 'N/A';
                 
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-gray-50 transition-colors duration-100';
@@ -464,14 +479,17 @@
             const colRef = getAttendanceCollectionRef();
             if (!colRef) return;
             
-            // 監聽並按時間倒序排列
             onSnapshot(colRef, (snapshot) => {
                 const records = [];
                 snapshot.forEach(doc => {
                     records.push(doc.data());
                 });
-                // 在客戶端排序，因為 Firestore order by 需要索引
-                records.sort((a, b) => b.checkInTime.toDate() - a.checkInTime.toDate()); 
+                // 在客戶端排序 (倒序)
+                records.sort((a, b) => {
+                    const timeA = a.checkInTime && a.checkInTime.toDate ? a.checkInTime.toDate().getTime() : 0;
+                    const timeB = b.checkInTime && b.checkInTime.toDate ? b.checkInTime.toDate().getTime() : 0;
+                    return timeB - timeA; 
+                });
                 renderRecords(records);
             }, (error) => {
                 console.error("監聽點名記錄失敗:", error);
@@ -479,32 +497,35 @@
             });
         };
 
+        // 記錄點名 (暴露給 HTML 行內事件)
         window.logAttendance = async (qrContent) => {
             const studentInfo = rosterData[qrContent];
             const scanResultEl = document.getElementById('scan-result');
             const latestAttendanceEl = document.getElementById('latest-attendance');
 
             if (!studentInfo) {
-                const msg = '錯誤：QR Code 內容無效或學生未在名單中。';
+                const msg = `錯誤：學號 ${qrContent} 未在名單中。`;
                 scanResultEl.textContent = msg;
                 scanResultEl.classList.replace('bg-gray-800', 'bg-red-600');
                 latestAttendanceEl.innerHTML = `<p class="text-red-600 font-bold">${msg}</p>`;
                 return false;
             }
             
+            const attendanceRef = getAttendanceCollectionRef();
+            if (!attendanceRef) return false;
+
             const attendanceRecord = {
                 studentId: studentInfo.studentId,
                 name: studentInfo.name,
-                checkInTime: serverTimestamp() // 使用 Firestore 伺服器時間
+                checkInTime: serverTimestamp() 
             };
 
             try {
-                await addDoc(getAttendanceCollectionRef(), attendanceRecord);
+                await addDoc(attendanceRef, attendanceRecord);
                 
                 const successMsg = `點名成功！學生：${studentInfo.name} (${studentInfo.studentId})`;
                 scanResultEl.textContent = successMsg;
                 scanResultEl.classList.replace('bg-red-600', 'bg-gray-800');
-                scanResultEl.classList.replace('bg-yellow-600', 'bg-gray-800');
                 
                 latestAttendanceEl.innerHTML = `
                     <div class="flex items-center space-x-3">
@@ -523,9 +544,13 @@
         };
 
         // --- 4. 資料匯出功能 (CSV) ---
+        // 匯出為 CSV (暴露給 HTML 行內事件)
         window.exportToCSV = async () => {
             const colRef = getAttendanceCollectionRef();
-            if (!colRef) return;
+            if (!colRef) {
+                showModal('錯誤', 'Firebase 尚未準備好，請稍候。');
+                return;
+            }
             
             try {
                 const snapshot = await getDocs(colRef);
@@ -537,26 +562,30 @@
                     return;
                 }
 
-                // 在客戶端排序
-                records.sort((a, b) => a.checkInTime.toDate() - b.checkInTime.toDate());
+                // 在客戶端排序 (升序)
+                records.sort((a, b) => {
+                    const timeA = a.checkInTime && a.checkInTime.toDate ? a.checkInTime.toDate().getTime() : 0;
+                    const timeB = b.checkInTime && b.checkInTime.toDate ? b.checkInTime.toDate().getTime() : 0;
+                    return timeA - timeB; 
+                });
 
                 // 準備 CSV 內容
                 let csvContent = "學號,姓名,點名時間\n";
 
                 records.forEach(record => {
                     const studentId = record.studentId || '';
-                    const name = record.name || '';
-                    const checkInDate = record.checkInTime ? new Date(record.checkInTime.toDate()).toLocaleString('zh-TW', {
+                    const name = (record.name || '').replace(/"/g, '""'); // 處理姓名中的引號
+                    const checkInDate = record.checkInTime && record.checkInTime.toDate ? new Date(record.checkInTime.toDate()).toLocaleString('zh-TW', {
                         year: 'numeric', month: '2-digit', day: '2-digit', 
                         hour: '2-digit', minute: '2-digit', second: '2-digit'
                     }) : '';
                     
-                    // 逗號分隔，確保姓名中的逗號不影響格式
+                    // 確保姓名被雙引號包圍，以處理中文或逗號
                     csvContent += `${studentId},"${name}",${checkInDate}\n`;
                 });
 
-                // 創建 Blob 並下載
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                // 創建 Blob 並下載 (新增 BOM 確保 Excel 正確顯示中文)
+                const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); 
                 const link = document.createElement("a");
                 const url = URL.createObjectURL(blob);
                 link.setAttribute("href", url);
@@ -583,6 +612,10 @@
         const highlightContext = highlightCanvas.getContext('2d');
         const cameraMessage = document.getElementById('camera-message');
 
+        let lastScannedCode = null;
+        let lastScanTime = 0;
+        const scanCooldown = 3000; // 3 秒冷卻時間
+
         const drawLine = (context, begin, end, color) => {
             context.beginPath();
             context.moveTo(begin.x, begin.y);
@@ -594,7 +627,7 @@
 
         const tick = () => {
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                cameraMessage.classList.add('hidden'); // 隱藏載入訊息
+                cameraMessage.classList.add('hidden'); 
 
                 // 設置 canvas 尺寸與 video 一致
                 canvasElement.height = video.videoHeight;
@@ -603,13 +636,12 @@
                 highlightCanvas.width = video.videoWidth;
 
                 // 將視訊幀繪製到隱藏的 canvas 上
+                // 為了正確掃描，這裡不需要 scaleX(-1)，只需要在 CSS 視覺上翻轉
                 canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
                 const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
                 
-                // 清除高亮 canvas
                 highlightContext.clearRect(0, 0, highlightCanvas.width, highlightCanvas.height);
 
-                // 使用 jsQR 掃描
                 const code = jsQR(imageData.data, imageData.width, imageData.height, {
                     inversionAttempts: "dontInvert",
                 });
@@ -623,14 +655,26 @@
                     
                     document.getElementById('scan-result').textContent = `已掃描：${code.data}`;
                     
-                    // 僅當名單快取已載入時才記錄點名
-                    if (Object.keys(rosterData).length > 0) {
-                        logAttendance(code.data);
-                    } else {
-                         document.getElementById('scan-result').textContent = `已掃描：${code.data} (正在載入名單...)`;
+                    const currentTime = Date.now();
+                    if (userId && (code.data !== lastScannedCode || currentTime - lastScanTime > scanCooldown)) {
+                        
+                        if (Object.keys(rosterData).length > 0) {
+                            window.logAttendance(code.data);
+                            lastScannedCode = code.data;
+                            lastScanTime = currentTime;
+                        } else {
+                             document.getElementById('scan-result').textContent = `已掃描：${code.data} (警告：名單未載入，無法記錄)`;
+                             document.getElementById('scan-result').classList.replace('bg-gray-800', 'bg-yellow-600');
+                        }
+                    } else if (!userId) {
+                        document.getElementById('scan-result').textContent = `已掃描：${code.data} (等待 Firebase 認證...)`;
+                    } else if (code.data === lastScannedCode && currentTime - lastScanTime < scanCooldown) {
+                         document.getElementById('scan-result').textContent = `已掃描：${code.data} (冷卻中...)`;
                     }
                 } else {
                     document.getElementById('scan-result').textContent = "請將 QR Code 置於掃描框內";
+                    document.getElementById('scan-result').classList.replace('bg-red-600', 'bg-gray-800');
+                    document.getElementById('scan-result').classList.replace('bg-yellow-600', 'bg-gray-800');
                 }
             }
 
@@ -639,49 +683,66 @@
 
         // 啟動相機
         const startCamera = () => {
+             // 如果相機已經在運行，先停止它
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+            }
+
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }) // 優先使用後置鏡頭
+                cameraMessage.textContent = '正在請求相機權限...';
+
+                navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: "environment", // 優先使用後置鏡頭
+                        width: { ideal: 1280 }, 
+                        height: { ideal: 720 } 
+                    } 
+                }) 
                 .then(function(stream) {
                     video.srcObject = stream;
-                    video.setAttribute("playsinline", true); // iOS 播放優化
                     video.play();
                     requestAnimationFrame(tick);
                 })
                 .catch(function(err) {
-                    console.error("無法存取相機:", err);
-                    let errorMessage = '錯誤：無法存取相機。請檢查以下問題：';
+                    console.error("無法存取相機詳細錯誤:", err);
+                    let errorMessage = '錯誤：無法存取相機。';
                     
                     if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                        errorMessage += ' (瀏覽器或系統權限被拒絕)';
+                        errorMessage += ' 請檢查瀏覽器（Safari/Chrome）和 Mac/iPad 系統設定中的相機權限。';
                     } else if (err.name === 'NotFoundError') {
-                        errorMessage += ' (未找到相機設備)';
+                        errorMessage += ' 未找到相機設備。';
                     } else if (err.name === 'NotReadableError') {
-                         errorMessage += ' (相機已被其他應用程式使用)';
-                    } else if (err.name === 'SecurityError') {
-                         errorMessage += ' (此頁面必須通過 HTTPS 或 localhost 運行)';
+                         errorMessage += ' 相機可能已被其他應用程式使用。';
                     } else {
-                        errorMessage += ` (錯誤類型: ${err.name || '未知'})`;
+                        errorMessage += ` 未知錯誤類型: ${err.name || '未知'}`;
                     }
 
                     cameraMessage.textContent = errorMessage;
                     document.getElementById('scan-result').textContent = "相機存取失敗。";
+                    document.getElementById('scan-result').classList.replace('bg-gray-800', 'bg-red-600');
                 });
             } else {
                 cameraMessage.textContent = '錯誤：您的瀏覽器不支援相機存取。';
                 document.getElementById('scan-result').textContent = "瀏覽器不支援相機。";
+                document.getElementById('scan-result').classList.replace('bg-gray-800', 'bg-red-600');
             }
         };
 
         // --- 6. 啟動所有功能 ---
         const startAppFeatures = () => {
-            setupRosterListener();  // 啟動名單即時監聽
-            setupRecordsListener(); // 啟動記錄即時監聽
-            startCamera();          // 啟動相機掃描器
+            // 確保依賴 Firebase 認證的服務已啟動
+            setupRosterListener();  
+            setupRecordsListener(); 
+            // 只有在掃描器標籤啟用時才啟動相機
+            if (document.getElementById('content-scanner').classList.contains('hidden') === false) {
+                 startCamera();
+            }
         };
 
         // 初始啟動
         initializeFirebase();
-        switchTab('scanner'); // 預設顯示掃描器標籤
+        // 預設切換到掃描器，並觸發 camera 啟動邏輯
+        window.switchTab('scanner'); 
 
     </script>
 </body>
