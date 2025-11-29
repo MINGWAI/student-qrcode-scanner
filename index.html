@@ -3,272 +3,255 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>學生 QR Code 點名系統 (Pro)</title>
+    <title>明門中文 - 點名系統</title>
     <!-- 載入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 載入 jsQR 掃描庫 -->
+    <!-- 載入 jsQR (掃描) -->
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.0.4/dist/jsQR.min.js"></script>
-    <!-- 載入 qrcode.js 產生 QR Code 函式庫 -->
+    <!-- 載入 qrcode.js (生成) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- 引入襯線字體增加高級感 -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&display=swap" rel="stylesheet">
+    
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
         
-        /* 掃描器容器：針對 iPad 優化高度 */
+        /* 品牌字體 */
+        .font-serif-tc { font-family: 'Noto Serif TC', serif; }
+
+        /* 掃描器容器 */
         .scanner-wrapper {
             position: relative;
             width: 100%;
             height: 0;
-            padding-bottom: 75%; /* 4:3 比例，適合 iPad */
+            padding-bottom: 75%; 
             background-color: #000;
             border-radius: 1rem;
             overflow: hidden;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
         }
-
-        .scanner-wrapper video, 
-        .scanner-wrapper canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
+        .scanner-wrapper video, .scanner-wrapper canvas {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;
         }
 
-        /* 掃描線特效 */
+        /* 掃描線動畫 */
         .scan-line {
-            position: absolute;
-            width: 100%;
-            height: 2px;
-            background: #00ff00;
-            box-shadow: 0 0 4px #00ff00;
-            top: 0;
-            left: 0;
-            animation: scan 2s infinite linear;
-            z-index: 10;
+            position: absolute; width: 100%; height: 2px; background: #D4AF37;
+            box-shadow: 0 0 4px #D4AF37; top: 0; left: 0;
+            animation: scan 2s infinite linear; z-index: 10;
         }
-
         @keyframes scan {
             0% { top: 0%; opacity: 0; }
             10% { opacity: 1; }
             90% { opacity: 1; }
             100% { top: 100%; opacity: 0; }
         }
-
-        /* 掃描框 */
         .scan-overlay {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 70%;
-            height: 70%;
-            border: 2px solid rgba(255, 255, 255, 0.5);
-            border-radius: 12px;
-            box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.5); /*周圍變暗*/
-            z-index: 5;
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 70%; height: 70%; border: 1px solid rgba(212, 175, 55, 0.5);
+            border-radius: 12px; box-shadow: 0 0 0 4000px rgba(0, 32, 96, 0.8); z-index: 5;
         }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen pb-20"> <!-- 底部留白給 iPad Home Bar -->
+<body class="bg-gray-50 min-h-screen pb-24">
 
     <div id="app" class="max-w-4xl mx-auto p-4">
         
-        <!-- 頂部標題與狀態 -->
-        <header class="mb-6 bg-white p-4 rounded-2xl shadow-sm">
+        <!-- 頂部品牌 Header -->
+        <header class="mb-6 bg-white p-6 rounded-2xl shadow-sm border-t-4 border-[#D4AF37]">
             <div class="flex justify-between items-center">
                 <div>
-                    <h1 class="text-2xl font-bold text-gray-800">📱 學生點名系統 Pro</h1>
-                    <p class="text-xs text-gray-500 mt-1">iPad/Mac 跨平台雲端同步版</p>
+                    <h1 class="text-3xl font-serif-tc font-bold text-[#002060]">明門中文</h1>
+                    <p class="text-xs text-gray-400 mt-1 tracking-widest">DSE VICTORY</p>
                 </div>
-                <div id="auth-indicator" class="h-3 w-3 rounded-full bg-red-500 animate-pulse" title="連線狀態"></div>
+                <!-- 連線狀態指示燈 -->
+                <div class="flex items-center gap-2">
+                    <span id="status-text" class="text-xs text-gray-400">連線中...</span>
+                    <div id="auth-indicator" class="h-3 w-3 rounded-full bg-gray-300 animate-pulse"></div>
+                </div>
             </div>
-            <div id="status-message" class="text-xs text-gray-500 mt-2 hidden">正在連線資料庫...</div>
         </header>
 
-        <!-- 導航切換 (類似 App 的 Tab) -->
-        <div class="flex space-x-2 mb-6 bg-gray-200 p-1 rounded-xl">
-            <button onclick="switchTab('scanner')" id="tab-scanner" class="flex-1 py-2 text-sm font-bold rounded-lg bg-white shadow text-blue-600 transition-all">
-                📷 掃描點名
+        <!-- 切換分頁 -->
+        <div class="flex p-1 mb-6 bg-gray-200 rounded-xl">
+            <button onclick="switchTab('scanner')" id="tab-scanner" class="flex-1 py-3 text-sm font-bold rounded-lg transition-all text-[#002060] bg-white shadow">
+                📷 掃描
             </button>
-            <button onclick="switchTab('roster')" id="tab-roster" class="flex-1 py-2 text-sm font-medium rounded-lg text-gray-600 hover:bg-gray-50 transition-all">
-                👥 學生名單
+            <button onclick="switchTab('roster')" id="tab-roster" class="flex-1 py-3 text-sm font-medium rounded-lg text-gray-500 hover:text-[#002060]">
+                👥 名單
             </button>
-            <button onclick="switchTab('records')" id="tab-records" class="flex-1 py-2 text-sm font-medium rounded-lg text-gray-600 hover:bg-gray-50 transition-all">
-                📊 點名記錄
+            <button onclick="switchTab('records')" id="tab-records" class="flex-1 py-3 text-sm font-medium rounded-lg text-gray-500 hover:text-[#002060]">
+                📊 記錄
             </button>
         </div>
 
         <!-- 1. 掃描器頁面 -->
         <div id="content-scanner" class="tab-content">
-            <div class="bg-white p-4 rounded-2xl shadow-sm">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
                 <div class="scanner-wrapper mb-4">
                     <video id="video" playsinline muted autoplay></video>
                     <canvas id="canvas" class="hidden"></canvas>
-                    <div class="scan-overlay">
-                        <div class="scan-line"></div>
-                    </div>
-                    <!-- 錯誤訊息層 -->
-                    <div id="camera-error" class="absolute inset-0 bg-gray-900 text-white flex flex-col items-center justify-center p-6 text-center z-20 hidden">
-                        <svg class="w-12 h-12 text-red-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
-                        <h3 class="font-bold text-lg mb-1">無法存取相機</h3>
-                        <p class="text-sm text-gray-300 mb-4">請確保您使用的是 <span class="text-yellow-400 font-mono">https://</span> 網址，並已在設備設定中允許相機權限。</p>
-                        <button onclick="startCamera()" class="px-4 py-2 bg-blue-600 rounded-lg text-sm">重試</button>
+                    <div class="scan-overlay"><div class="scan-line"></div></div>
+                    
+                    <!-- 權限錯誤提示 -->
+                    <div id="camera-error" class="absolute inset-0 bg-[#002060] text-white flex flex-col items-center justify-center p-6 text-center z-20 hidden">
+                        <h3 class="font-serif-tc font-bold text-xl mb-2 text-[#D4AF37]">無法啟動相機</h3>
+                        <p class="text-sm text-gray-300 mb-6 leading-relaxed">
+                            請確認您是使用 HTTPS 網址開啟，<br>並已在設定中允許相機權限。
+                        </p>
+                        <button onclick="startCamera()" class="px-6 py-2 bg-[#D4AF37] text-[#002060] font-bold rounded-full">重試</button>
                     </div>
                 </div>
-                
-                <div id="scan-feedback" class="text-center p-4 bg-gray-50 rounded-xl border border-gray-200">
-                    <p class="text-gray-500 text-sm">請將 QR Code 對準框線中央</p>
+                <div id="scan-feedback" class="text-center p-3 rounded-lg bg-blue-50 text-[#002060] text-sm font-medium">
+                    等待掃描...
                 </div>
             </div>
         </div>
 
         <!-- 2. 名單管理頁面 -->
         <div id="content-roster" class="tab-content hidden">
-            <!-- 新增學生表單 -->
-            <div class="bg-white p-6 rounded-2xl shadow-sm mb-6">
-                <h2 class="font-bold text-gray-800 mb-4 flex items-center">
-                    <span class="bg-blue-100 text-blue-600 p-1.5 rounded-lg mr-2 text-xs">NEW</span> 新增學生
-                </h2>
+            <!-- 新增區塊 -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm mb-6 border-l-4 border-[#002060]">
+                <h2 class="font-serif-tc font-bold text-lg text-[#002060] mb-4">新增學生資料</h2>
                 <form id="add-student-form" class="space-y-4">
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-xs font-medium text-gray-500 mb-1">學號 (QR內容)</label>
-                            <input type="text" id="studentId" required class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="例如: S001">
+                            <label class="text-xs font-bold text-gray-500 uppercase">學號</label>
+                            <input type="text" id="studentId" required class="w-full mt-1 p-3 bg-gray-50 border-gray-200 rounded-lg focus:border-[#002060] outline-none border" placeholder="S001">
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-gray-500 mb-1">姓名</label>
-                            <input type="text" id="studentName" required class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="例如: 陳大文">
+                            <label class="text-xs font-bold text-gray-500 uppercase">姓名</label>
+                            <input type="text" id="studentName" required class="w-full mt-1 p-3 bg-gray-50 border-gray-200 rounded-lg focus:border-[#002060] outline-none border" placeholder="姓名">
                         </div>
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-gray-500 mb-1">電話 (選填)</label>
-                        <input type="tel" id="studentPhone" class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="例如: 0912345678">
+                        <label class="text-xs font-bold text-gray-500 uppercase">電話</label>
+                        <input type="tel" id="studentPhone" class="w-full mt-1 p-3 bg-gray-50 border-gray-200 rounded-lg focus:border-[#002060] outline-none border" placeholder="0912-345-678">
                     </div>
-                    <button type="submit" class="w-full py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg shadow-blue-200 active:scale-95 transition-all">
-                        儲存並上傳雲端
+                    <button type="submit" class="w-full py-3 bg-[#002060] text-white font-bold rounded-lg shadow-lg active:scale-95 transition-all">
+                        儲存資料
                     </button>
                 </form>
             </div>
 
-            <!-- 名單列表 -->
-            <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
-                <div class="p-4 border-b border-gray-100">
-                    <h2 class="font-bold text-gray-800">學生總表</h2>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm text-left">
-                        <thead class="bg-gray-50 text-gray-500">
-                            <tr>
-                                <th class="p-4">學號</th>
-                                <th class="p-4">姓名/電話</th>
-                                <th class="p-4 text-right">功能</th>
-                            </tr>
-                        </thead>
-                        <tbody id="roster-tbody" class="divide-y divide-gray-100">
-                            <tr><td colspan="3" class="p-8 text-center text-gray-400">載入資料中...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+            <!-- 列表區塊 -->
+            <div class="space-y-3" id="roster-list">
+                <!-- 動態生成學生卡片 -->
+                <div class="text-center py-10 text-gray-400">載入中...</div>
             </div>
         </div>
 
         <!-- 3. 記錄頁面 -->
         <div id="content-records" class="tab-content hidden">
-            <div class="bg-white p-4 rounded-2xl shadow-sm mb-4 flex justify-between items-center">
-                <h2 class="font-bold text-gray-800">今日點名概況</h2>
-                <button onclick="exportToCSV()" class="flex items-center space-x-1 px-4 py-2 bg-green-100 text-green-700 rounded-lg text-xs font-bold hover:bg-green-200 transition-colors">
-                    <span>📥 匯出 Excel</span>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="font-serif-tc font-bold text-[#002060] text-lg">今日記錄</h2>
+                <button onclick="exportToCSV()" class="px-4 py-2 bg-[#002060] text-white text-xs font-bold rounded-lg shadow hover:bg-blue-900">
+                    匯出 Excel
                 </button>
             </div>
-
-            <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm text-left">
-                        <thead class="bg-gray-50 text-gray-500">
-                            <tr>
-                                <th class="p-4">時間</th>
-                                <th class="p-4">學生資訊</th>
-                                <th class="p-4">狀態</th>
-                            </tr>
-                        </thead>
-                        <tbody id="records-tbody" class="divide-y divide-gray-100">
-                            <tr><td colspan="3" class="p-8 text-center text-gray-400">尚無記錄</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+            <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
+                <table class="w-full text-sm text-left">
+                    <thead class="bg-gray-50 text-gray-500 font-bold">
+                        <tr><th class="p-4">時間</th><th class="p-4">學生</th><th class="p-4">狀態</th></tr>
+                    </thead>
+                    <tbody id="records-tbody" class="divide-y divide-gray-100"></tbody>
+                </table>
             </div>
         </div>
 
     </div>
 
-    <!-- 模態框：通用提示 -->
-    <div id="modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-        <div class="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl transform transition-all">
-            <h3 id="modal-title" class="text-lg font-bold text-gray-900 mb-2">提示</h3>
-            <p id="modal-message" class="text-gray-600 mb-6">內容</p>
-            <button onclick="closeModal()" class="w-full py-3 bg-gray-100 text-gray-800 font-bold rounded-xl hover:bg-gray-200">關閉</button>
+    <!-- 學生證預覽模態框 -->
+    <div id="card-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#002060]/90 backdrop-blur-sm">
+        <div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="p-4 bg-gray-100 border-b flex justify-between items-center">
+                <h3 class="font-bold text-[#002060]">學生證預覽</h3>
+                <button onclick="closeCardModal()" class="text-gray-500 hover:text-red-500 text-2xl">&times;</button>
+            </div>
+            
+            <div class="flex-1 overflow-auto p-4 flex justify-center bg-gray-200">
+                <!-- Canvas 將被渲染在這裡 -->
+                <canvas id="id-card-canvas" class="shadow-xl rounded-lg max-w-full h-auto"></canvas>
+            </div>
+
+            <div class="p-4 bg-white border-t space-y-2">
+                <p class="text-xs text-center text-gray-400 mb-2">請點擊下方按鈕下載圖片</p>
+                <button onclick="downloadCard()" class="w-full py-3 bg-[#D4AF37] text-[#002060] font-bold rounded-xl shadow-lg hover:bg-yellow-500">
+                    下載學生證 (圖片)
+                </button>
+            </div>
         </div>
     </div>
 
-    <!-- 模態框：QR Code 顯示 -->
-    <div id="qr-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-        <div class="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl text-center">
-            <h3 id="qr-modal-name" class="text-xl font-bold text-gray-900 mb-1">學生姓名</h3>
-            <p id="qr-modal-id" class="text-sm text-gray-500 mb-4">ID: S001</p>
-            
-            <div id="qrcode-container" class="flex justify-center mb-4 p-4 bg-white border-2 border-dashed border-gray-200 rounded-xl"></div>
-            
-            <p class="text-xs text-gray-400 mb-6">請長按圖片儲存，或直接截圖</p>
-            <button onclick="closeQRModal()" class="w-full py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg">完成</button>
+    <!-- 隱藏的 QR Code 生成區 (用於 Canvas 繪製) -->
+    <div id="hidden-qr" class="hidden"></div>
+
+    <!-- 通用提示框 -->
+    <div id="modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40">
+        <div class="bg-white rounded-xl p-6 shadow-xl max-w-xs w-full text-center">
+            <h3 id="modal-title" class="font-bold text-lg mb-2">提示</h3>
+            <p id="modal-message" class="text-gray-600 mb-4 text-sm"></p>
+            <button onclick="document.getElementById('modal').classList.add('hidden')" class="w-full py-2 bg-gray-100 rounded-lg font-bold">關閉</button>
         </div>
     </div>
 
-    <!-- 邏輯腳本 -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, addDoc, deleteDoc, onSnapshot, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- 設定與狀態 ---
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default';
-        const initialToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        // =======================================================
+        // 【重要】請將下方的 firebaseConfig 物件替換為您自己的設定
+        // =======================================================
+        const firebaseConfig = {
+            // 請在此處貼上您的 Firebase 設定代碼
+            // 例如:
+            // apiKey: "AIzaSyD...",
+            // authDomain: "your-project.firebaseapp.com",
+            // projectId: "your-project-id",
+            // storageBucket: "your-project.appspot.com",
+            // messagingSenderId: "123456789",
+            // appId: "1:123456789:web:abcdef"
+        };
+        // =======================================================
+
+        const appId = 'student-system'; // 固定 App ID
         
         let db, auth, userId;
-        let rosterMap = {}; // 學號 -> 學生資料 (快取)
+        let rosterMap = {}; 
 
-        // --- 初始化 Firebase ---
+        // --- 初始化 ---
         async function initApp() {
+            // 檢查是否已設定 Config
             if (!firebaseConfig.apiKey) {
-                showModal('配置錯誤', '找不到 Firebase 設定。');
-                return;
+                return showModal('⚠️ 設定未完成', '請參考教學，將 Firebase Config 貼入 index.html 程式碼中。');
             }
 
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
 
-            // 認證流程
             onAuthStateChanged(auth, user => {
+                const indicator = document.getElementById('auth-indicator');
+                const statusText = document.getElementById('status-text');
                 if (user) {
                     userId = user.uid;
-                    document.getElementById('auth-indicator').classList.replace('bg-red-500', 'bg-green-500');
-                    document.getElementById('auth-indicator').classList.remove('animate-pulse');
-                    console.log("已連線，用戶ID:", userId);
+                    indicator.classList.remove('bg-gray-300', 'animate-pulse');
+                    indicator.classList.add('bg-green-500');
+                    statusText.textContent = "已連線";
+                    statusText.classList.add('text-green-600');
                     startListeners();
                 } else {
-                    document.getElementById('auth-indicator').classList.replace('bg-green-500', 'bg-red-500');
-                    // 嘗試登入
-                    if (initialToken) signInWithCustomToken(auth, initialToken);
-                    else signInAnonymously(auth);
+                    indicator.classList.add('bg-red-500');
+                    statusText.textContent = "未連線";
+                    // 自動匿名登入
+                    signInAnonymously(auth).catch(e => showModal('登入失敗', e.message));
                 }
             });
         }
 
-        // --- Firestore 監聽器 ---
         function startListeners() {
-            // 1. 監聽名單
+            // 監聽名單
             onSnapshot(collection(db, `artifacts/${appId}/users/${userId}/roster`), snapshot => {
                 const students = [];
                 rosterMap = {};
@@ -279,263 +262,294 @@
                 });
                 renderRoster(students);
             });
-
-            // 2. 監聽記錄 (只抓今天的，或全部抓取後在前端過濾)
-            // 為了效能，這裡暫時抓取全部，實際生產環境建議用 query 限制日期
+            // 監聽記錄
             onSnapshot(collection(db, `artifacts/${appId}/users/${userId}/attendance_records`), snapshot => {
                 const records = [];
                 snapshot.forEach(doc => records.push(doc.data()));
-                // 按時間倒序
                 records.sort((a, b) => (b.checkInTime?.seconds || 0) - (a.checkInTime?.seconds || 0));
                 renderRecords(records);
             });
         }
 
-        // --- 渲染 UI ---
+        // --- 渲染名單列表 ---
         function renderRoster(students) {
-            const tbody = document.getElementById('roster-tbody');
+            const list = document.getElementById('roster-list');
             if (students.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3" class="p-8 text-center text-gray-400">目前沒有學生，請上方新增</td></tr>';
+                list.innerHTML = '<div class="text-center py-8 text-gray-400 text-sm">暫無學生資料</div>';
                 return;
             }
-            tbody.innerHTML = students.map(s => `
-                <tr class="border-b border-gray-50 hover:bg-gray-50">
-                    <td class="p-4 font-mono text-blue-600 font-bold">${s.studentId}</td>
-                    <td class="p-4">
-                        <div class="font-bold text-gray-800">${s.name}</div>
-                        <div class="text-xs text-gray-400">${s.phone || '無電話'}</div>
-                    </td>
-                    <td class="p-4 text-right">
-                        <button onclick="window.showQR('${s.studentId}', '${s.name}')" class="p-2 bg-blue-50 text-blue-600 rounded-lg mr-1 hover:bg-blue-100">QR</button>
-                        <button onclick="window.delStudent('${s.studentId}')" class="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100">刪</button>
-                    </td>
-                </tr>
+            list.innerHTML = students.map(s => `
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="bg-blue-50 text-[#002060] font-mono text-xs px-2 py-1 rounded font-bold">${s.studentId}</span>
+                            <span class="font-bold text-gray-800">${s.name}</span>
+                        </div>
+                        <div class="text-xs text-gray-400 mt-1">${s.phone || '無電話'}</div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="window.previewCard('${s.studentId}', '${s.name}', '${s.phone||''}')" class="px-3 py-2 bg-[#002060] text-white text-xs font-bold rounded-lg shadow hover:bg-blue-900">
+                            學生證
+                        </button>
+                        <button onclick="window.delStudent('${s.studentId}')" class="p-2 text-red-400 hover:text-red-600">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </div>
+                </div>
             `).join('');
         }
 
         function renderRecords(records) {
             const tbody = document.getElementById('records-tbody');
             if (records.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3" class="p-8 text-center text-gray-400">尚無點名記錄</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="3" class="p-6 text-center text-gray-400">尚無記錄</td></tr>';
                 return;
             }
             tbody.innerHTML = records.map(r => {
                 const date = r.checkInTime ? new Date(r.checkInTime.seconds * 1000) : new Date();
-                const timeStr = date.toLocaleTimeString('zh-TW', { hour: '2-digit', minute:'2-digit' });
-                const dateStr = date.toLocaleDateString('zh-TW');
                 return `
                 <tr class="border-b border-gray-50">
                     <td class="p-4">
-                        <div class="font-bold text-gray-800">${timeStr}</div>
-                        <div class="text-xs text-gray-400">${dateStr}</div>
+                        <div class="font-bold text-gray-800">${date.toLocaleTimeString('zh-TW', {hour:'2-digit', minute:'2-digit'})}</div>
+                        <div class="text-xs text-gray-400">${date.toLocaleDateString('zh-TW')}</div>
                     </td>
                     <td class="p-4">
-                        <div class="font-bold text-gray-800">${r.name}</div>
-                        <div class="text-xs text-gray-500">${r.studentId}</div>
+                        <div class="font-bold text-[#002060]">${r.name}</div>
+                        <div class="text-xs text-gray-400">${r.studentId}</div>
                     </td>
-                    <td class="p-4">
-                        <span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">已到</span>
-                    </td>
+                    <td class="p-4"><span class="text-green-500 font-bold">✔</span></td>
                 </tr>
             `}).join('');
         }
 
         // --- 業務邏輯 ---
-        
-        // 新增學生
         document.getElementById('add-student-form').addEventListener('submit', async e => {
             e.preventDefault();
-            if(!userId) return showModal('錯誤', '尚未連線到資料庫');
-
+            if (!userId) return showModal('錯誤', '未連線');
             const id = document.getElementById('studentId').value.trim();
             const name = document.getElementById('studentName').value.trim();
             const phone = document.getElementById('studentPhone').value.trim();
-
             try {
-                await setDoc(doc(db, `artifacts/${appId}/users/${userId}/roster`, id), {
-                    studentId: id, name, phone, createdAt: serverTimestamp()
-                });
-                showModal('成功', `已新增學生：${name}`);
+                await setDoc(doc(db, `artifacts/${appId}/users/${userId}/roster`, id), { studentId: id, name, phone });
+                showModal('成功', `已新增：${name}`);
                 e.target.reset();
-            } catch (err) {
-                console.error(err);
-                showModal('失敗', '儲存失敗，請檢查網路');
-            }
+            } catch (err) { console.error(err); }
         });
 
-        // 刪除學生
         window.delStudent = async (id) => {
-            if(!confirm('確定要刪除這位學生嗎？(點名記錄會保留)')) return;
-            try {
-                await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/roster`, id));
-            } catch(err) { showModal('錯誤', err.message); }
+            if(!confirm('確定刪除？')) return;
+            try { await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/roster`, id)); } catch(e){}
         };
 
-        // 處理掃描結果
-        window.handleScan = async (code) => {
-            if(!userId) return { success: false, msg: '未連線' };
+        // --- 核心：產生格調學生證 (Canvas) ---
+        window.previewCard = (id, name, phone) => {
+            const modal = document.getElementById('card-modal');
+            const canvas = document.getElementById('id-card-canvas');
+            const ctx = canvas.getContext('2d');
             
-            const student = rosterMap[code];
-            if (!student) return { success: false, msg: '無效的 QR Code (查無此人)' };
+            const W = 600;
+            const H = 1066;
+            canvas.width = W;
+            canvas.height = H;
 
-            // 寫入記錄
-            try {
-                await addDoc(collection(db, `artifacts/${appId}/users/${userId}/attendance_records`), {
-                    studentId: student.studentId,
-                    name: student.name,
-                    phone: student.phone || '',
-                    checkInTime: serverTimestamp()
-                });
-                return { success: true, msg: `${student.name} 點名成功！`, student };
-            } catch (err) {
-                return { success: false, msg: '寫入失敗' };
-            }
-        };
+            // 1. 繪製背景 (白色)
+            ctx.fillStyle = "#FFFFFF";
+            ctx.fillRect(0, 0, W, H);
 
-        // 匯出 CSV
-        window.exportToCSV = async () => {
-            if(!userId) return;
-            const snapshot = await getDocs(collection(db, `artifacts/${appId}/users/${userId}/attendance_records`));
-            let csvContent = "\uFEFF時間,日期,學號,姓名,電話\n"; // BOM for Excel
+            // 2. 繪製頂部 Header (深藍色)
+            const headerH = 200;
+            ctx.fillStyle = "#002060";
+            ctx.fillRect(0, 0, W, headerH);
 
-            const records = [];
-            snapshot.forEach(d => records.push(d.data()));
-            records.sort((a,b) => (a.checkInTime?.seconds || 0) - (b.checkInTime?.seconds || 0));
+            // 3. 繪製 Logo 文字 (金色)
+            ctx.fillStyle = "#D4AF37";
+            ctx.font = "bold 60px 'Noto Serif TC', serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("明門中文", W/2, headerH/2 - 20);
+            
+            ctx.font = "20px sans-serif";
+            ctx.letterSpacing = "4px";
+            ctx.fillText("DSE VICTORY", W/2, headerH/2 + 40);
 
-            records.forEach(r => {
-                const d = r.checkInTime ? new Date(r.checkInTime.seconds * 1000) : new Date();
-                const date = d.toLocaleDateString('zh-TW');
-                const time = d.toLocaleTimeString('zh-TW');
-                csvContent += `${time},${date},${r.studentId},${r.name},${r.phone || ''}\n`;
+            // 4. 繪製學生資訊 (中間)
+            // 姓名
+            ctx.fillStyle = "#002060";
+            ctx.font = "bold 80px 'Noto Serif TC', serif";
+            ctx.fillText(name, W/2, headerH + 150);
+            
+            // 裝飾線
+            ctx.strokeStyle = "#D4AF37";
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(W/2 - 50, headerH + 200);
+            ctx.lineTo(W/2 + 50, headerH + 200);
+            ctx.stroke();
+
+            // 電話
+            ctx.fillStyle = "#666666";
+            ctx.font = "30px sans-serif";
+            ctx.fillText(phone || "", W/2, headerH + 250);
+            ctx.fillText(`ID: ${id}`, W/2, headerH + 300);
+
+            // 5. 生成 QR Code 並繪製到 Canvas 底部
+            // 先在隱藏區生成 QR
+            const qrContainer = document.getElementById('hidden-qr');
+            qrContainer.innerHTML = '';
+            new QRCode(qrContainer, {
+                text: id,
+                width: 400, // 產生大一點
+                height: 400,
+                colorDark : "#002060", // QR Code 用深藍色
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.H
             });
 
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = `點名表_${new Date().toISOString().slice(0,10)}.csv`;
-            document.body.appendChild(link);
+            // 等待 QR code 圖片生成後繪製
+            setTimeout(() => {
+                const qrImg = qrContainer.querySelector('img');
+                if (qrImg && qrImg.src) {
+                    const img = new Image();
+                    img.onload = () => {
+                        // QR Code 區域 (底部 40%)
+                        const qrSize = W * 0.6; 
+                        const qrX = (W - qrSize) / 2;
+                        const qrY = H - qrSize - 100; 
+
+                        // 繪製 QR 邊框 (金色)
+                        ctx.strokeStyle = "#D4AF37";
+                        ctx.lineWidth = 10;
+                        ctx.strokeRect(qrX - 20, qrY - 20, qrSize + 40, qrSize + 40);
+
+                        ctx.drawImage(img, qrX, qrY, qrSize, qrSize);
+                    };
+                    img.src = qrImg.src;
+                }
+            }, 100);
+
+            // 底部裝飾條
+            ctx.fillStyle = "#D4AF37";
+            ctx.fillRect(0, H - 20, W, 20);
+
+            modal.classList.remove('hidden');
+        };
+
+        window.closeCardModal = () => document.getElementById('card-modal').classList.add('hidden');
+
+        window.downloadCard = () => {
+            const canvas = document.getElementById('id-card-canvas');
+            const link = document.createElement('a');
+            link.download = `學生證_${new Date().getTime()}.png`;
+            link.href = canvas.toDataURL('image/png');
             link.click();
-            document.body.removeChild(link);
         };
 
-        // --- UI 互動 ---
-        window.showQR = (id, name) => {
-            const container = document.getElementById('qrcode-container');
-            container.innerHTML = '';
-            document.getElementById('qr-modal-name').textContent = name;
-            document.getElementById('qr-modal-id').textContent = `ID: ${id}`;
-            new QRCode(container, { text: id, width: 200, height: 200 });
-            document.getElementById('qr-modal').classList.remove('hidden');
-        };
-
-        window.closeQRModal = () => document.getElementById('qr-modal').classList.add('hidden');
-        window.showModal = (title, msg) => {
-            document.getElementById('modal-title').textContent = title;
-            document.getElementById('modal-message').textContent = msg;
-            document.getElementById('modal').classList.remove('hidden');
-        };
-        window.closeModal = () => document.getElementById('modal').classList.add('hidden');
-
-        // Tab 切換
-        window.switchTab = (tab) => {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('button[id^="tab-"]').forEach(el => {
-                el.classList.remove('bg-white', 'shadow', 'text-blue-600');
-                el.classList.add('text-gray-600', 'hover:bg-gray-50');
-            });
-            
-            document.getElementById(`content-${tab}`).classList.remove('hidden');
-            const btn = document.getElementById(`tab-${tab}`);
-            btn.classList.add('bg-white', 'shadow', 'text-blue-600');
-            btn.classList.remove('text-gray-600', 'hover:bg-gray-50');
-
-            if(tab === 'scanner') startCamera();
-            else stopCamera();
-        };
-
-        // --- 相機邏輯 (純 JS) ---
-        let videoStream = null;
+        // --- 掃描與其他邏輯 ---
+        let videoStream;
         let isScanning = false;
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        const feedback = document.getElementById('scan-feedback');
 
         window.startCamera = async () => {
-            const errorEl = document.getElementById('camera-error');
-            errorEl.classList.add('hidden');
-            
+            document.getElementById('camera-error').classList.add('hidden');
             try {
-                // 強制請求後置鏡頭 (environment)
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "environment" } 
-                });
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
                 video.srcObject = stream;
-                // iOS 必須
-                video.setAttribute("playsinline", true); 
+                video.setAttribute("playsinline", true);
                 await video.play();
-                videoStream = stream;
                 isScanning = true;
                 requestAnimationFrame(scanTick);
             } catch (err) {
-                console.error("相機錯誤", err);
-                errorEl.classList.remove('hidden');
+                console.error(err);
+                document.getElementById('camera-error').classList.remove('hidden');
             }
         };
 
         window.stopCamera = () => {
             isScanning = false;
-            if (videoStream) {
-                videoStream.getTracks().forEach(track => track.stop());
-                videoStream = null;
-            }
+            if (video.srcObject) video.srcObject.getTracks().forEach(t => t.stop());
         };
 
-        // 冷卻機制
-        let lastScanCode = null;
-        let lastScanTime = 0;
-
+        let lastCode, lastTime = 0;
         function scanTick() {
             if (!isScanning) return;
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
                 canvas.height = video.videoHeight;
                 canvas.width = video.videoWidth;
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
-
+                
                 if (code) {
                     const now = Date.now();
-                    // 防止重複掃描 (3秒冷卻)
-                    if (code.data !== lastScanCode || (now - lastScanTime > 3000)) {
-                        lastScanCode = code.data;
-                        lastScanTime = now;
-                        
-                        // 播放音效 (可選)
-                        // ...
-                        
-                        // 處理資料
-                        window.handleScan(code.data).then(res => {
-                            if (res.success) {
-                                feedback.innerHTML = `<span class="text-green-600 font-bold text-lg">✅ ${res.msg}</span>`;
-                                // 1.5秒後復原
-                                setTimeout(() => feedback.innerHTML = '<p class="text-gray-500 text-sm">請將 QR Code 對準框線中央</p>', 1500);
-                            } else {
-                                feedback.innerHTML = `<span class="text-red-500 font-bold">❌ ${res.msg}</span>`;
-                            }
-                        });
+                    if (code.data !== lastCode || (now - lastTime > 3000)) {
+                        lastCode = code.data;
+                        lastTime = now;
+                        handleScan(code.data);
                     }
                 }
             }
             requestAnimationFrame(scanTick);
         }
 
+        async function handleScan(code) {
+            const feedback = document.getElementById('scan-feedback');
+            if (!rosterMap[code]) {
+                feedback.textContent = `❌ 無效代碼: ${code}`;
+                feedback.classList.add('bg-red-100', 'text-red-600');
+                return;
+            }
+            const s = rosterMap[code];
+            await addDoc(collection(db, `artifacts/${appId}/users/${userId}/attendance_records`), {
+                studentId: s.studentId, name: s.name, checkInTime: serverTimestamp()
+            });
+            feedback.innerHTML = `✅ <b>${s.name}</b> 點名成功`;
+            feedback.className = "text-center p-3 rounded-lg bg-green-100 text-green-700 text-sm font-medium";
+            setTimeout(() => {
+                feedback.textContent = "等待掃描...";
+                feedback.className = "text-center p-3 rounded-lg bg-blue-50 text-[#002060] text-sm font-medium";
+            }, 2000);
+        }
+
+        window.exportToCSV = async () => {
+            if (!userId) return;
+            const snap = await getDocs(collection(db, `artifacts/${appId}/users/${userId}/attendance_records`));
+            let csv = "\uFEFF時間,日期,學號,姓名\n";
+            const recs = [];
+            snap.forEach(d => recs.push(d.data()));
+            recs.sort((a,b) => (a.checkInTime?.seconds||0)-(b.checkInTime?.seconds||0));
+            recs.forEach(r => {
+                const d = r.checkInTime ? new Date(r.checkInTime.seconds*1000) : new Date();
+                csv += `${d.toLocaleTimeString()},${d.toLocaleDateString()},${r.studentId},${r.name}\n`;
+            });
+            const url = URL.createObjectURL(new Blob([csv], {type: 'text/csv'}));
+            const a = document.createElement('a'); a.href = url; a.download = '點名.csv'; a.click();
+        };
+
+        window.switchTab = (tab) => {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`content-${tab}`).classList.remove('hidden');
+            document.querySelectorAll('button[id^="tab-"]').forEach(btn => {
+                btn.classList.remove('bg-white', 'shadow', 'text-[#002060]');
+                btn.classList.add('text-gray-500');
+            });
+            const activeBtn = document.getElementById(`tab-${tab}`);
+            activeBtn.classList.add('bg-white', 'shadow', 'text-[#002060]');
+            activeBtn.classList.remove('text-gray-500');
+
+            if (tab === 'scanner') startCamera(); else stopCamera();
+        };
+        
+        window.showModal = (t, m) => {
+            document.getElementById('modal-title').textContent = t;
+            document.getElementById('modal-message').textContent = m;
+            document.getElementById('modal').classList.remove('hidden');
+        };
+
         // 啟動
         initApp();
         switchTab('scanner');
-
     </script>
 </body>
 </html>
