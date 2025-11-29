@@ -223,16 +223,13 @@
         
         // --- 1. 您的 Firebase 配置 (請在此處填入) ---
         // !!! VERY IMPORTANT !!!
-        // 如果您在 Canvas 環境外部執行此程式碼 (例如 GitHub Pages)，
-        // 請將您的 Firebase 專案配置貼到下面的 MY_FIREBASE_CONFIG 變數中。
-        // 請確保您從 Firebase Console > 專案設定 > 您的應用程式 > 配置 取得。
         const MY_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyAFM-0Hi6J1dtWltpCsGGObBxWtO2ZRRpY",
-  authDomain: "dsevictory-attendance-system.firebaseapp.com",
-  projectId: "dsevictory-attendance-system",
-  storageBucket: "dsevictory-attendance-system.firebasestorage.app",
-  messagingSenderId: "796565425082",
-  appId: "1:796565425082:web:08babee5be08c0ffdc2b83",
+            apiKey: "AIzaSyAFM-0Hi6J1dtWltpCsGGObBxWtO2ZRRpY",
+            authDomain: "dsevictory-attendance-system.firebaseapp.com",
+            projectId: "dsevictory-attendance-system",
+            storageBucket: "dsevictory-attendance-system.firebasestorage.app",
+            messagingSenderId: "796565425082",
+            appId: "1:796565425082:web:08babee5be08c0ffdc2b83"
             // measurementId: "G-4BCRYC7KKT" (此項通常用於 Analytics，非核心功能，故省略)
         };
         // ------------------------------------------
@@ -345,10 +342,29 @@
                 authStatusEl.textContent = '身份驗證中...';
                 authStatusEl.classList.remove('hidden');
 
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
+                try {
+                    // 執行身份驗證
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (authError) {
+                    console.error("身份驗證失敗:", authError);
+                    if (authError.code === 'auth/admin-restricted-operation') {
+                        // 針對 admin-restricted-operation 錯誤提供特定指引
+                        authStatusEl.textContent = '身份驗證失敗：(auth/admin-restricted-operation)。錯誤原因：您可能在客戶端程式碼中調用了需要伺服器端 Admin SDK 權限的功能，或者您的自定義令牌有問題。';
+                        authStatusEl.classList.replace('bg-yellow-100', 'bg-red-100');
+                        authStatusEl.classList.replace('text-yellow-800', 'text-red-800');
+                        // 阻止後續依賴 auth 的功能啟動
+                        return; 
+                    } else {
+                        // 處理其他身份驗證錯誤
+                        authStatusEl.textContent = `身份驗證失敗：${authError.message}`;
+                        authStatusEl.classList.replace('bg-yellow-100', 'bg-red-100');
+                        authStatusEl.classList.replace('text-yellow-800', 'text-red-800');
+                        return;
+                    }
                 }
                 
                 // 狀態改變後，確保 userId 存在才開始 Firestore 操作
@@ -370,7 +386,7 @@
                 });
 
             } catch (error) {
-                console.error("Firebase 初始化或認證失敗:", error);
+                console.error("Firebase 初始化失敗:", error);
                 authStatusEl.textContent = `錯誤：${error.message}`;
                 authStatusEl.classList.replace('bg-yellow-100', 'bg-red-100');
                 authStatusEl.classList.replace('text-yellow-800', 'text-red-800');
@@ -383,6 +399,7 @@
                 console.error("Firestore 或 userId 尚未初始化。");
                 return null;
             }
+            // 私有路徑: /artifacts/{appId}/users/{userId}/roster
             const path = `/artifacts/${appId}/users/${userId}/roster`;
             return collection(db, path);
         };
@@ -481,6 +498,7 @@
                 console.error("Firestore 或 userId 尚未初始化。");
                 return null;
             }
+            // 私有路徑: /artifacts/{appId}/users/{userId}/attendance_records
             const path = `/artifacts/${appId}/users/${userId}/attendance_records`; 
             return collection(db, path);
         };
