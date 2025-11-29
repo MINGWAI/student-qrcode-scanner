@@ -7,7 +7,7 @@
     <!-- 載入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 載入 jsQR 掃描庫 -->
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.0.4/dist/jsQR.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsQR@1.0.4/dist/jsQR.min.js"></script>
     <!-- 載入 qrcode.js 產生 QR Code 函式庫 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -88,6 +88,9 @@
                 </button>
                 <button type="button" onclick="switchTab('records')" id="tab-records" class="tab-button inline-flex items-center px-4 py-2 border-b-2 font-medium text-sm focus:outline-none transition-colors duration-200 text-gray-500 border-transparent hover:border-gray-300 hover:text-gray-700">
                     點名記錄
+                </button>
+                <button type="button" onclick="switchTab('account')" id="tab-account" class="tab-button inline-flex items-center px-4 py-2 border-b-2 font-medium text-sm focus:outline-none transition-colors duration-200 text-gray-500 border-transparent hover:border-gray-300 hover:text-gray-700">
+                    帳戶管理
                 </button>
             </nav>
         </div>
@@ -187,6 +190,50 @@
             </div>
         </div>
 
+        <!-- 4. 帳戶管理 (Tab) - 新增 -->
+        <div id="content-account" class="tab-content hidden">
+            <h2 class="text-2xl font-semibold mb-6 text-gray-800">帳戶管理與升級</h2>
+            <div class="bg-white p-6 rounded-xl shadow-lg mb-8">
+                <div id="current-auth-info" class="mb-4 p-4 border rounded-lg bg-gray-50">
+                    <p class="font-bold text-lg text-gray-700">當前認證狀態：</p>
+                    <p id="auth-type-display" class="text-gray-600"></p>
+                    <p id="user-id-display" class="text-gray-600"></p>
+                </div>
+                
+                <!-- 帳號升級區塊 -->
+                <div id="upgrade-section">
+                    <h3 class="text-xl font-bold text-gray-900 mb-3">升級到永久帳號</h3>
+                    <p class="text-gray-600 mb-4">
+                        將您當前的匿名帳號連結到電子郵件，以確保您的點名資料永久保存，並能在任何裝置上登入。
+                        <span class="font-semibold text-red-600">（請確保已啟用 Firebase Email/Password 登入）</span>
+                    </p>
+                    <form id="upgrade-account-form" class="space-y-4">
+                        <div>
+                            <label for="upgrade-email" class="block text-sm font-medium text-gray-700">電子郵件</label>
+                            <input type="email" id="upgrade-email" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
+                        </div>
+                        <div>
+                            <label for="upgrade-password" class="block text-sm font-medium text-gray-700">密碼 (至少 6 位元)</label>
+                            <input type="password" id="upgrade-password" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 border">
+                        </div>
+                        <button type="submit" id="upgrade-button" class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition duration-150 shadow-md">
+                            升級帳號並保留資料
+                        </button>
+                    </form>
+                </div>
+
+                <!-- 登入登出區塊 -->
+                <div class="mt-8 pt-6 border-t border-gray-200">
+                    <button onclick="window.handleSignOut()" class="w-full bg-red-500 text-white py-2 px-4 rounded-md hover:bg-red-600 transition duration-150 shadow-md">
+                        登出
+                    </button>
+                    <p class="text-sm text-gray-500 mt-2 text-center">登出後，需要重新整理頁面並再次登入。</p>
+                </div>
+
+            </div>
+        </div>
+        <!-- 帳戶管理 (Tab) - 結束 -->
+
     </div>
 
     <!-- 錯誤/提示訊息模態框 -->
@@ -218,7 +265,17 @@
     <!-- 載入 Firebase SDK 和應用程式邏輯 -->
     <script type="module">
         import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            signInWithCustomToken, 
+            onAuthStateChanged, 
+            signOut,
+            EmailAuthProvider,
+            linkWithCredential,
+            isSignInWithEmailLink,
+            updatePassword
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, addDoc, setDoc, onSnapshot, collection, serverTimestamp, deleteDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // --- 1. 您的 Firebase 配置 (請在此處填入) ---
@@ -230,7 +287,6 @@
             storageBucket: "dsevictory-attendance-system.firebasestorage.app",
             messagingSenderId: "796565425082",
             appId: "1:796565425082:web:08babee5be08c0ffdc2b83"
-            // measurementId: "G-4BCRYC7KKT" (此項通常用於 Analytics，非核心功能，故省略)
         };
         // ------------------------------------------
 
@@ -238,7 +294,6 @@
         setLogLevel('debug');
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         
-        // 檢查 Canvas 環境變數。如果不存在，則使用用戶手動設定的配置。
         let firebaseConfig = MY_FIREBASE_CONFIG;
         if (typeof __firebase_config !== 'undefined' && __firebase_config !== '') {
              try {
@@ -248,17 +303,19 @@
             }
         }
         
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' && __initial_auth_token !== '' ? __initial_auth_token : null;
         
         let app, db, auth, userId;
+        let authMethodType = 'Unknown';
         let rosterData = {}; // 用於快取名單，加速點名
 
         // UI 元素
         const authStatusEl = document.getElementById('auth-status');
-        const secureContextWarningEl = document.getElementById('secure-context-warning'); // 新增
+        const secureContextWarningEl = document.getElementById('secure-context-warning'); 
         const rosterTbody = document.getElementById('roster-tbody');
         const recordsTbody = document.getElementById('records-tbody');
-        
+        const upgradeSectionEl = document.getElementById('upgrade-section');
+
         // --- UI 控制函式 ---
         // 模態框函數 (暴露給 HTML 行內事件)
         window.showModal = (title, message) => {
@@ -314,6 +371,7 @@
             button.classList.remove('text-gray-500', 'border-transparent', 'hover:border-gray-300', 'hover:text-gray-700');
             
             // 如果切換到掃描器，確保相機啟動 (防止在其他標籤時佔用相機)
+            const video = document.getElementById('video');
             if (tabName === 'scanner' && userId) {
                  // 重新啟動相機
                  startCamera();
@@ -321,11 +379,15 @@
                  // 停止相機流，釋放資源
                  video.srcObject.getTracks().forEach(track => track.stop());
             }
+            
+            // 如果切換到帳戶管理，更新資訊
+            if (tabName === 'account' && auth.currentUser) {
+                updateAccountInfo(auth.currentUser);
+            }
         };
 
         // --- 2. Firebase 認證和初始化 ---
         const initializeFirebase = async () => {
-            // 檢查配置是否完整
             if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
                 authStatusEl.textContent = '錯誤：Firebase 配置遺失。請在程式碼中填入您的配置。';
                 authStatusEl.classList.replace('bg-yellow-100', 'bg-red-100');
@@ -342,46 +404,65 @@
                 authStatusEl.textContent = '身份驗證中...';
                 authStatusEl.classList.remove('hidden');
 
+                
                 try {
-                    // 執行身份驗證
+                    // 執行身份驗證：優先使用 Canvas 提供的自定義令牌
                     if (initialAuthToken) {
+                        authMethodType = '自定義令牌 (Custom Token)';
                         await signInWithCustomToken(auth, initialAuthToken);
                     } else {
+                        // 外部環境回退到匿名登錄
+                        authMethodType = '匿名登錄 (Anonymous)';
                         await signInAnonymously(auth);
                     }
                 } catch (authError) {
                     console.error("身份驗證失敗:", authError);
                     if (authError.code === 'auth/admin-restricted-operation') {
-                        // 針對 admin-restricted-operation 錯誤提供特定指引
-                        authStatusEl.textContent = '身份驗證失敗：(auth/admin-restricted-operation)。錯誤原因：您可能在客戶端程式碼中調用了需要伺服器端 Admin SDK 權限的功能，或者您的自定義令牌有問題。';
-                        authStatusEl.classList.replace('bg-yellow-100', 'bg-red-100');
-                        authStatusEl.classList.replace('text-yellow-800', 'text-red-800');
-                        // 阻止後續依賴 auth 的功能啟動
-                        return; 
+                        authStatusEl.textContent = `身份驗證失敗：(${authError.code})。
+                            請在 Firebase Console > Authentication > Sign-in method 中，確認已啟用「匿名」登錄。`;
                     } else {
-                        // 處理其他身份驗證錯誤
                         authStatusEl.textContent = `身份驗證失敗：${authError.message}`;
-                        authStatusEl.classList.replace('bg-yellow-100', 'bg-red-100');
-                        authStatusEl.classList.replace('text-yellow-800', 'text-red-800');
-                        return;
                     }
+                    authStatusEl.classList.replace('bg-yellow-100', 'bg-red-100');
+                    authStatusEl.classList.replace('text-yellow-800', 'text-red-800');
+                    return; 
                 }
                 
                 // 狀態改變後，確保 userId 存在才開始 Firestore 操作
                 onAuthStateChanged(auth, (user) => {
                     if (user) {
                         userId = user.uid;
-                        authStatusEl.textContent = `認證成功。使用者 ID: ${userId.substring(0, 8)}...`;
+                        
+                        // 判斷是否為匿名帳號，並更新 authMethodType
+                        const isAnonymous = user.isAnonymous;
+                        if (isAnonymous && authMethodType !== '自定義令牌 (Custom Token)') {
+                             authMethodType = '匿名登錄 (Anonymous)';
+                        } else if (!isAnonymous) {
+                             // 檢查 Email/Password 登入類型
+                             const emailProvider = user.providerData.find(p => p.providerId === 'password');
+                             if (emailProvider) {
+                                 authMethodType = '電子郵件/密碼 (Email/Password)';
+                             } else if (authMethodType !== '自定義令牌 (Custom Token)') {
+                                 authMethodType = '永久帳號 (Unknown)';
+                             }
+                        }
+
+                        authStatusEl.textContent = `認證成功 (${authMethodType})。使用者 ID: ${userId.substring(0, 8)}... (完整 ID: ${userId})`;
                         authStatusEl.classList.replace('bg-yellow-100', 'bg-green-100');
                         authStatusEl.classList.replace('text-yellow-800', 'text-green-800');
+                        
+                        // 更新帳戶管理頁面資訊
+                        updateAccountInfo(user);
                         
                         // 認證成功後啟動應用程式核心功能
                         startAppFeatures(); 
                     } else {
                         userId = null;
+                        authMethodType = '未認證';
                         authStatusEl.textContent = '未認證。';
                         authStatusEl.classList.replace('bg-yellow-100', 'bg-red-100');
                         authStatusEl.classList.replace('text-yellow-800', 'text-red-800');
+                        updateAccountInfo(null);
                     }
                 });
 
@@ -393,7 +474,83 @@
             }
         };
 
-        // --- 3. 學生名單管理功能 (Firestore) ---
+        // --- 3. 帳號管理功能 (新功能) ---
+
+        const updateAccountInfo = (user) => {
+            const authTypeDisplayEl = document.getElementById('auth-type-display');
+            const userIdDisplayEl = document.getElementById('user-id-display');
+            
+            if (user) {
+                authTypeDisplayEl.textContent = `類型: ${authMethodType}`;
+                userIdDisplayEl.textContent = `UID: ${user.uid}`;
+                
+                // 只有在匿名登錄且非 Canvas 令牌時，才顯示升級區塊
+                if (user.isAnonymous && authMethodType === '匿名登錄 (Anonymous)') {
+                    upgradeSectionEl.classList.remove('hidden');
+                } else {
+                    upgradeSectionEl.classList.add('hidden');
+                }
+            } else {
+                authTypeDisplayEl.textContent = `類型: 未登入`;
+                userIdDisplayEl.textContent = `UID: N/A`;
+                upgradeSectionEl.classList.add('hidden');
+            }
+        };
+
+        // 處理帳號升級
+        document.getElementById('upgrade-account-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('upgrade-email').value.trim();
+            const password = document.getElementById('upgrade-password').value.trim();
+            const currentUser = auth.currentUser;
+            
+            if (!currentUser || !currentUser.isAnonymous) {
+                showModal('錯誤', '您當前不是匿名帳號，無需升級。');
+                return;
+            }
+
+            if (password.length < 6) {
+                showModal('錯誤', '密碼長度必須至少為 6 個字符。');
+                return;
+            }
+
+            // 創建 Email/Password 認證憑證
+            const credential = EmailAuthProvider.credential(email, password);
+
+            try {
+                // 將匿名帳號連結到新的認證憑證，以實現升級並保留資料
+                await linkWithCredential(currentUser, credential);
+                
+                showModal('升級成功', '您的帳號已成功升級為永久的電子郵件/密碼帳號，所有資料已保留！');
+                document.getElementById('upgrade-account-form').reset();
+                updateAccountInfo(auth.currentUser); // 更新 UI
+                
+            } catch (error) {
+                console.error("帳號升級失敗:", error);
+                let errorMessage = '升級失敗。請確認：';
+                if (error.code === 'auth/email-already-in-use') {
+                    errorMessage += ' 此電子郵件已被其他帳號使用。';
+                } else if (error.code === 'auth/weak-password') {
+                     errorMessage += ' 密碼強度不足。';
+                } else {
+                    errorMessage += ` 錯誤代碼: ${error.code}。您需要在 Firebase Console 中啟用 Email/Password 登入。`;
+                }
+                showModal('升級錯誤', errorMessage);
+            }
+        });
+
+        // 處理登出
+        window.handleSignOut = async () => {
+            try {
+                await signOut(auth);
+                showModal('登出成功', '您已登出。請重新整理頁面以匿名登入，或使用您的永久帳號登入。');
+            } catch (error) {
+                console.error("登出失敗:", error);
+                showModal('登出錯誤', `登出失敗：${error.message}`);
+            }
+        };
+        
+        // --- 4. 學生名單管理功能 (Firestore) ---
         const getRosterCollectionRef = () => {
             if (!db || !userId) {
                 console.error("Firestore 或 userId 尚未初始化。");
@@ -436,7 +593,11 @@
             onSnapshot(colRef, (snapshot) => {
                 const students = [];
                 snapshot.forEach(doc => {
-                    students.push(doc.data());
+                    // 確保我們只處理包含 studentId 和 name 的文檔
+                    const data = doc.data();
+                    if (data.studentId) {
+                         students.push(data);
+                    }
                 });
                 renderRoster(students);
             }, (error) => {
@@ -458,6 +619,7 @@
             const rosterRef = getRosterCollectionRef();
             if (!rosterRef) return;
 
+            // 使用學號作為文件 ID，以便於查找和更新
             const docRef = doc(rosterRef, studentId); 
             const data = { studentId, name: studentName };
 
@@ -479,7 +641,8 @@
 
             const docRef = doc(rosterRef, studentId);
             try {
-                showModal('確認刪除', `正在刪除學號 ${studentId} 的學生...`);
+                // 使用非阻塞式的 UI 提示
+                showModal('處理中', `正在刪除學號 ${studentId} 的學生...`);
                 
                 await deleteDoc(docRef);
                 // 重新打開一個成功的模態框，讓用戶知道操作已完成
@@ -492,7 +655,7 @@
             }
         };
 
-        // --- 4. 點名記錄功能 (Firestore) ---
+        // --- 5. 點名記錄功能 (Firestore) ---
         const getAttendanceCollectionRef = () => {
             if (!db || !userId) {
                 console.error("Firestore 或 userId 尚未初始化。");
@@ -511,6 +674,7 @@
             }
 
             records.forEach(record => {
+                // 將 Firestore Timestamp 轉換為 Date 物件
                 const checkInDate = record.checkInTime && record.checkInTime.toDate ? new Date(record.checkInTime.toDate()).toLocaleString('zh-TW') : 'N/A';
                 
                 const tr = document.createElement('tr');
@@ -533,7 +697,7 @@
                 snapshot.forEach(doc => {
                     records.push(doc.data());
                 });
-                // 在客戶端排序 (倒序)
+                // 在客戶端排序 (倒序，最新的在最上面)
                 records.sort((a, b) => {
                     const timeA = a.checkInTime && a.checkInTime.toDate ? a.checkInTime.toDate().getTime() : 0;
                     const timeB = b.checkInTime && b.checkInTime.toDate ? b.checkInTime.toDate().getTime() : 0;
@@ -592,7 +756,7 @@
             }
         };
 
-        // --- 5. 資料匯出功能 (CSV) ---
+        // --- 6. 資料匯出功能 (CSV) ---
         // 匯出為 CSV (暴露給 HTML 行內事件)
         window.exportToCSV = async () => {
             const colRef = getAttendanceCollectionRef();
@@ -653,7 +817,7 @@
         };
 
 
-        // --- 6. QR Code 掃描器邏輯 ---
+        // --- 7. QR Code 掃描器邏輯 ---
         const video = document.getElementById('video');
         const canvasElement = document.getElementById('canvas');
         const canvas = canvasElement.getContext('2d');
@@ -685,7 +849,12 @@
                 highlightCanvas.width = video.videoWidth;
 
                 // 將視訊幀繪製到隱藏的 canvas 上
-                canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+                // 由於 CSS 翻轉了 video，繪製時也需要考慮翻轉來正確解析 QR 碼位置
+                canvas.save();
+                canvas.scale(-1, 1);
+                canvas.drawImage(video, -canvasElement.width, 0, canvasElement.width, canvasElement.height);
+                canvas.restore();
+
                 const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
                 
                 highlightContext.clearRect(0, 0, highlightCanvas.width, highlightCanvas.height);
@@ -739,7 +908,7 @@
             // 檢查安全環境 (HTTPS)
             if (!window.isSecureContext) {
                  secureContextWarningEl.classList.remove('hidden');
-                 cameraMessage.textContent = '嚴重錯誤：必須透過 HTTPS 存取才能啟動相機 (iPad/Safari 限制)。';
+                 cameraMessage.textContent = '嚴重錯誤：必須透過 HTTPS 存取才能啟動相機 (iOS/Safari 限制)。';
                  document.getElementById('scan-result').textContent = "相機存取失敗 (HTTPS 錯誤)。";
                  return; 
             } else {
@@ -771,9 +940,6 @@
                         errorMessage += ' 未找到相機設備。';
                     } else if (err.name === 'NotReadableError') {
                          errorMessage += ' 相機可能已被其他應用程式使用。請關閉所有使用相機的 App。';
-                    } else if (err.name === 'OverconstrainedError') {
-                         // 針對 iPad 簡化條件，可能是理想尺寸導致問題
-                         errorMessage += ' 相機設定衝突，請確保設備只有一個後置相機可用。';
                     } else {
                         errorMessage += ` 未知錯誤類型: ${err.name || '未知'}`;
                     }
@@ -789,7 +955,7 @@
             }
         };
 
-        // --- 7. 啟動所有功能 ---
+        // --- 8. 啟動所有功能 ---
         const startAppFeatures = () => {
             // 確保依賴 Firebase 認證的服務已啟動
             setupRosterListener();  
