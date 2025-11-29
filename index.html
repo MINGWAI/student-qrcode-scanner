@@ -6,7 +6,7 @@
     <title>明門中文(DSE VICTORY) 學生證點名系統</title>
     <!-- 載入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 載入 jsQR 掃描庫 -->
+    <!-- 載入 jsQR 掃描庫 (使用穩定版本) -->
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <!-- 載入 qrcode.js 產生 QR Code 函式庫 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -25,17 +25,13 @@
         .scanner-container {
             position: relative;
             width: 100%;
-            height: 0;
-            padding-bottom: 75%; /* 4:3 比例 */
-            overflow: hidden;
             background-color: #000;
             border-radius: 1rem;
+            overflow: hidden;
+            /* 保持適當的寬高比 */
+            aspect-ratio: 4/3; 
         }
-        .scanner-container video, 
-        .scanner-container canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
+        .scanner-container video {
             width: 100%;
             height: 100%;
             object-fit: cover;
@@ -46,27 +42,27 @@
             position: absolute;
             top: 50%;
             left: 50%;
-            width: 60%;
-            height: 60%;
+            width: 70%;
+            height: 70%;
             transform: translate(-50%, -50%);
             border: 4px solid var(--dse-gold);
-            box-shadow: 0 0 0 1000px rgba(0,0,0,0.5); /* 遮罩效果 */
+            box-shadow: 0 0 0 4000px rgba(0,0,0,0.5); /* 遮罩效果 */
             z-index: 10;
         }
         .scan-line {
             position: absolute;
             width: 100%;
-            height: 2px;
-            background: var(--dse-gold);
+            height: 3px;
+            background: #ef4444; /* 紅色掃描線更明顯 */
             animation: scan 2s infinite;
-            box-shadow: 0 0 4px var(--dse-gold);
+            box-shadow: 0 0 4px #ef4444;
         }
         @keyframes scan {
             0% { top: 0; }
             100% { top: 100%; }
         }
 
-        /* --- 學生證樣式 (還原設計) --- */
+        /* --- 學生證樣式 --- */
         .id-card {
             max-width: 380px;
             width: 100%;
@@ -126,6 +122,9 @@
             display: inline-block;
             border-radius: 8px;
         }
+        
+        /* 隱藏元素 */
+        .hidden { display: none !important; }
     </style>
 </head>
 <body class="min-h-screen pb-10">
@@ -140,43 +139,53 @@
                 </h1>
                 <p class="text-sm text-gray-500 font-bold mt-1 tracking-wider">專業學生證點名系統</p>
             </div>
-            <div id="auth-status" class="mt-2 md:mt-0 text-xs px-3 py-1 rounded-full bg-gray-200 text-gray-600 inline-block">
-                系統初始化中...
+            <div id="auth-status-container" class="mt-2 md:mt-0">
+                <span id="auth-status" class="text-xs px-3 py-1 rounded-full bg-gray-200 text-gray-600 inline-block font-bold">
+                    系統初始化中...
+                </span>
             </div>
         </header>
 
         <!-- Tabs -->
-        <div class="flex space-x-1 bg-white p-1 rounded-xl shadow-sm mb-6 border border-gray-200 overflow-x-auto">
-            <button onclick="switchTab('scanner')" id="tab-scanner" class="flex-1 py-2 px-4 rounded-lg text-sm font-bold transition-colors text-white" style="background-color: var(--dse-dark-blue);">點名掃描</button>
-            <button onclick="switchTab('roster')" id="tab-roster" class="flex-1 py-2 px-4 rounded-lg text-sm font-bold text-gray-500 hover:bg-gray-100 transition-colors">學生名單</button>
-            <button onclick="switchTab('records')" id="tab-records" class="flex-1 py-2 px-4 rounded-lg text-sm font-bold text-gray-500 hover:bg-gray-100 transition-colors">點名記錄</button>
-            <button onclick="switchTab('account')" id="tab-account" class="flex-1 py-2 px-4 rounded-lg text-sm font-bold text-gray-500 hover:bg-gray-100 transition-colors">設定</button>
+        <div class="flex space-x-1 bg-white p-1 rounded-xl shadow-sm mb-6 border border-gray-200 overflow-x-auto sticky top-0 z-20">
+            <button onclick="switchTab('scanner')" id="tab-scanner" class="flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-colors text-white" style="background-color: var(--dse-dark-blue);">點名掃描</button>
+            <button onclick="switchTab('roster')" id="tab-roster" class="flex-1 py-3 px-4 rounded-lg text-sm font-bold text-gray-500 hover:bg-gray-100 transition-colors">學生名單</button>
+            <button onclick="switchTab('records')" id="tab-records" class="flex-1 py-3 px-4 rounded-lg text-sm font-bold text-gray-500 hover:bg-gray-100 transition-colors">點名記錄</button>
+            <button onclick="switchTab('account')" id="tab-account" class="flex-1 py-3 px-4 rounded-lg text-sm font-bold text-gray-500 hover:bg-gray-100 transition-colors">帳戶管理</button>
         </div>
 
         <!-- 1. 掃描器頁面 -->
         <div id="view-scanner" class="view-section">
-            <div class="bg-white rounded-2xl shadow-lg p-4 md:p-6 border border-gray-100">
+            <div class="bg-white rounded-2xl shadow-lg p-4 border border-gray-100">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl font-bold text-gray-800">相機掃描</h2>
-                    <button onclick="toggleCamera()" class="text-sm px-3 py-1.5 rounded-lg border border-gray-300 flex items-center gap-2 hover:bg-gray-50">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                        切換鏡頭 (前後)
+                    <button onclick="toggleCamera()" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        切換前後鏡頭
                     </button>
                 </div>
 
+                <!-- 錯誤提示區 -->
+                <div id="camera-error" class="hidden mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm font-bold"></div>
+
                 <div class="scanner-container">
                     <video id="video" playsinline autoplay muted></video>
-                    <canvas id="scan-canvas" style="display:none;"></canvas> <!-- 隱藏的 canvas 用於處理影像 -->
+                    <!-- 用於 jsQR 的隱藏 Canvas -->
+                    <canvas id="scan-canvas" class="hidden"></canvas> 
+                    
                     <div class="scan-frame">
                         <div class="scan-line"></div>
                     </div>
-                    <div id="camera-overlay" class="absolute inset-0 flex items-center justify-center bg-gray-900 text-white z-20">
-                        <p>正在啟動相機...</p>
+                    <div id="camera-loading" class="absolute inset-0 flex items-center justify-center bg-gray-900 text-white z-20">
+                        <div class="text-center">
+                            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
+                            <p>啟動相機中...</p>
+                        </div>
                     </div>
                 </div>
 
-                <div id="scan-feedback" class="mt-4 p-4 rounded-xl bg-gray-50 border border-gray-200 text-center">
-                    <p class="text-gray-500 font-medium">請將學生證 QR Code 對準黃色框內</p>
+                <div id="scan-result-container" class="mt-4 p-4 rounded-xl bg-gray-50 border border-gray-200 text-center min-h-[80px] flex items-center justify-center">
+                    <p class="text-gray-500 font-medium">請將學生證 QR Code 對準框內</p>
                 </div>
             </div>
         </div>
@@ -185,33 +194,42 @@
         <div id="view-roster" class="view-section hidden">
             <!-- 新增學生表單 -->
             <div class="bg-white rounded-2xl shadow-lg p-6 mb-6 border-l-4" style="border-left-color: var(--dse-gold);">
-                <h3 class="text-lg font-bold mb-4 flex items-center">
-                    <span class="bg-yellow-100 text-yellow-800 p-1 rounded mr-2">➕</span> 新增學生
+                <h3 class="text-lg font-bold mb-4 flex items-center text-gray-800">
+                    <span class="bg-yellow-100 text-yellow-800 p-1 rounded mr-2">➕</span> 新增學生資料
                 </h3>
                 <form id="add-student-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <input type="text" id="input-id" placeholder="學生證編號 (e.g. VIP01)" class="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" required>
-                    <input type="text" id="input-name" placeholder="學生姓名 (e.g. ELKA)" class="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" required>
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow transition-transform active:scale-95" style="background-color: var(--dse-dark-blue);">
-                        新增至名單
-                    </button>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">學生證編號 / 色碼</label>
+                        <input type="text" id="input-id" placeholder="e.g. VIP01" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 mb-1">學生姓名</label>
+                        <input type="text" id="input-name" placeholder="e.g. ELKA" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" required>
+                    </div>
+                    <div class="flex items-end">
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow transition-transform active:scale-95" style="background-color: var(--dse-dark-blue);">
+                            確認新增
+                        </button>
+                    </div>
                 </form>
             </div>
 
             <!-- 名單列表 -->
             <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
-                <table class="w-full text-left border-collapse">
-                    <thead class="bg-gray-50 border-b">
-                        <tr>
-                            <th class="p-4 font-bold text-gray-600 text-sm">編號</th>
-                            <th class="p-4 font-bold text-gray-600 text-sm">姓名</th>
-                            <th class="p-4 font-bold text-gray-600 text-sm text-right">學生證</th>
-                        </tr>
-                    </thead>
-                    <tbody id="roster-list">
-                        <!-- JS 動態生成 -->
-                        <tr><td colspan="3" class="p-8 text-center text-gray-400">正在載入資料庫...</td></tr>
-                    </tbody>
-                </table>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-gray-50 border-b">
+                            <tr>
+                                <th class="p-4 font-bold text-gray-600 text-sm whitespace-nowrap">編號</th>
+                                <th class="p-4 font-bold text-gray-600 text-sm whitespace-nowrap">姓名</th>
+                                <th class="p-4 font-bold text-gray-600 text-sm text-right whitespace-nowrap">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="roster-list">
+                            <tr><td colspan="3" class="p-8 text-center text-gray-400">正在載入資料庫...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -219,57 +237,79 @@
         <div id="view-records" class="view-section hidden">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold text-gray-800">出席記錄</h2>
-                <button onclick="exportCSV()" class="bg-green-600 text-white px-4 py-2 rounded-lg font-bold shadow hover:bg-green-700 flex items-center gap-2">
+                <button onclick="exportCSV()" class="bg-green-600 text-white px-4 py-2 rounded-lg font-bold shadow hover:bg-green-700 flex items-center gap-2 text-sm">
                     📥 匯出 Excel
                 </button>
             </div>
             <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
-                <table class="w-full text-left">
-                    <thead class="bg-gray-50 border-b">
-                        <tr>
-                            <th class="p-4 font-bold text-gray-600 text-sm">時間</th>
-                            <th class="p-4 font-bold text-gray-600 text-sm">學生</th>
-                            <th class="p-4 font-bold text-gray-600 text-sm">編號</th>
-                        </tr>
-                    </thead>
-                    <tbody id="records-list">
-                        <tr><td colspan="3" class="p-8 text-center text-gray-400">尚無點名記錄</td></tr>
-                    </tbody>
-                </table>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead class="bg-gray-50 border-b">
+                            <tr>
+                                <th class="p-4 font-bold text-gray-600 text-sm whitespace-nowrap">時間</th>
+                                <th class="p-4 font-bold text-gray-600 text-sm whitespace-nowrap">學生</th>
+                                <th class="p-4 font-bold text-gray-600 text-sm whitespace-nowrap">編號</th>
+                            </tr>
+                        </thead>
+                        <tbody id="records-list">
+                            <tr><td colspan="3" class="p-8 text-center text-gray-400">尚無點名記錄</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
-        <!-- 4. 帳戶/設定頁面 -->
+        <!-- 4. 帳戶管理 (已修正：匿名時也能登入) -->
         <div id="view-account" class="view-section hidden">
-            <div class="bg-white rounded-2xl shadow-lg p-6 max-w-md mx-auto">
-                <h2 class="text-xl font-bold mb-6 text-center">系統設定</h2>
+            <div class="max-w-md mx-auto">
+                <h2 class="text-2xl font-bold mb-6 text-gray-800">帳戶管理</h2>
                 
-                <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
-                    <p class="text-xs text-gray-500 uppercase font-bold mb-1">當前使用者 ID</p>
-                    <p id="display-uid" class="font-mono text-sm break-all text-blue-800">...</p>
+                <div class="bg-white rounded-2xl shadow-lg p-6 mb-6">
+                    <div class="mb-4">
+                        <p class="text-xs font-bold text-gray-500 uppercase">當前狀態</p>
+                        <p id="account-status-text" class="text-lg font-bold text-gray-800">檢查中...</p>
+                        <p id="account-uid-text" class="text-xs font-mono text-gray-400 mt-1 break-all">UID: ...</p>
+                    </div>
+
+                    <!-- 升級帳號 (匿名 -> 永久) -->
+                    <div id="upgrade-section" class="hidden pt-4 border-t border-gray-100">
+                        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+                            <p class="text-sm text-yellow-800">⚠️ 這是<strong>匿名帳號</strong>。如需保留資料，請升級或登入現有帳號。</p>
+                        </div>
+                        <h3 class="font-bold text-gray-800 mb-2">升級為永久帳號 (保留資料)</h3>
+                        <form id="upgrade-form" class="space-y-3">
+                            <input type="email" id="up-email" placeholder="設定 Email" class="w-full p-3 border rounded-lg" required>
+                            <input type="password" id="up-password" placeholder="設定密碼 (6位以上)" class="w-full p-3 border rounded-lg" required>
+                            <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700">確認升級</button>
+                        </form>
+                    </div>
+
+                    <!-- 登出按鈕 (登入後才顯示) -->
+                    <div id="logout-section" class="hidden pt-4 border-t border-gray-100 mt-4">
+                        <button onclick="handleLogout()" class="w-full border border-red-500 text-red-500 py-3 rounded-lg font-bold hover:bg-red-50 transition">
+                            登出帳號
+                        </button>
+                    </div>
                 </div>
 
-                <div id="login-section">
-                    <h3 class="font-bold text-gray-800 mb-2">管理員登入 (同步資料用)</h3>
+                <!-- 登入現有帳號 (匿名或未登入時都顯示) -->
+                <div id="login-section" class="bg-white rounded-2xl shadow-lg p-6">
+                    <h3 class="font-bold text-gray-800 mb-4 text-lg">登入現有帳號 (切換帳號)</h3>
+                    <p class="text-sm text-gray-500 mb-4">如果您已經有永久帳號，請在此登入以存取您的舊資料。</p>
                     <form id="login-form" class="space-y-3">
-                        <input type="email" id="login-email" placeholder="Email" class="w-full p-2 border rounded" required>
-                        <input type="password" id="login-password" placeholder="Password" class="w-full p-2 border rounded" required>
-                        <button type="submit" class="w-full bg-green-600 text-white py-2 rounded font-bold hover:bg-green-700">登入 / 註冊</button>
+                        <input type="email" id="in-email" placeholder="Email" class="w-full p-3 border rounded-lg" required>
+                        <input type="password" id="in-password" placeholder="密碼" class="w-full p-3 border rounded-lg" required>
+                        <button type="submit" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700">登入</button>
                     </form>
                 </div>
-
-                <button onclick="handleLogout()" id="logout-btn" class="hidden w-full mt-4 border border-red-500 text-red-500 py-2 rounded font-bold hover:bg-red-50">
-                    登出
-                </button>
             </div>
         </div>
 
     </div>
 
-    <!-- 學生證模態框 (Popup) -->
+    <!-- 學生證模態框 -->
     <div id="id-card-modal" class="fixed inset-0 bg-black/80 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm" onclick="closeModal()">
         <div class="relative w-full max-w-[380px]" onclick="event.stopPropagation()">
-            <!-- 學生證設計 -->
             <div class="id-card animate-[zoomIn_0.3s_ease-out]">
                 <div class="id-header">
                     <div class="id-title">明門中文</div>
@@ -278,27 +318,41 @@
                 <div class="id-body">
                     <h2 id="modal-name" class="student-name">STUDENT</h2>
                     <div id="modal-id" class="student-id-badge">ID: ----</div>
-                    
                     <div class="flex justify-center">
                         <div id="modal-qrcode" class="qr-frame"></div>
                     </div>
                     <p class="mt-4 text-xs text-gray-400 font-mono">SCAN TO CHECK-IN</p>
                 </div>
             </div>
-            
             <button onclick="closeModal()" class="mt-4 w-full bg-white/20 text-white py-3 rounded-xl font-bold backdrop-blur-md hover:bg-white/30 transition">
                 關閉
             </button>
         </div>
     </div>
 
-    <!-- 腳本邏輯 -->
+    <!-- 錯誤/提示模態框 -->
+    <div id="alert-modal" class="fixed inset-0 bg-black/50 z-[60] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl p-6 max-w-sm w-full shadow-2xl">
+            <h3 id="alert-title" class="text-lg font-bold mb-2">提示</h3>
+            <p id="alert-msg" class="text-gray-600 mb-4">內容</p>
+            <button onclick="document.getElementById('alert-modal').classList.add('hidden')" class="w-full bg-gray-800 text-white py-2 rounded-lg font-bold">確定</button>
+        </div>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            signInWithEmailAndPassword, 
+            linkWithCredential, 
+            EmailAuthProvider,
+            onAuthStateChanged, 
+            signOut 
+        } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, doc, setDoc, onSnapshot, query, orderBy, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // --- 1. Firebase 配置 (直接使用您提供的 Key) ---
+        // --- Firebase 配置 ---
         const firebaseConfig = {
             apiKey: "AIzaSyAFM-0Hi6J1dtWltpCsGGObBxWtO2ZRRpY",
             authDomain: "dsevictory-attendance-system.firebaseapp.com",
@@ -309,369 +363,284 @@
             measurementId: "G-4BCRYC7KKT"
         };
 
-        // 初始化 Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
         let currentUser = null;
-        let rosterMap = {}; // 用於快速查找: ID -> Name
+        let rosterMap = {}; 
         let videoStream = null;
-        let cameraFacingMode = 'environment'; // 預設後置鏡頭，可切換 'user'
+        let cameraFacingMode = 'environment'; 
+        let scanActive = false;
 
-        // --- 2. 應用程式邏輯 ---
-
-        // 登入狀態監聽
+        // --- 帳戶管理與狀態監聽 ---
         onAuthStateChanged(auth, (user) => {
+            const statusText = document.getElementById('auth-status');
+            const accountStatusText = document.getElementById('account-status-text');
+            const accountUidText = document.getElementById('account-uid-text');
+            const upgradeSection = document.getElementById('upgrade-section');
+            const loginSection = document.getElementById('login-section');
+            const logoutSection = document.getElementById('logout-section');
+
             if (user) {
                 currentUser = user;
-                document.getElementById('auth-status').textContent = "系統已連線";
-                document.getElementById('auth-status').className = "mt-2 md:mt-0 text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 inline-block font-bold";
-                document.getElementById('display-uid').textContent = user.uid;
-                document.getElementById('login-section').classList.add('hidden');
-                document.getElementById('logout-btn').classList.remove('hidden');
-                
-                // 啟動監聽器
+                statusText.textContent = "系統已連線";
+                statusText.className = "text-xs px-3 py-1 rounded-full bg-green-100 text-green-700 inline-block font-bold";
+                accountUidText.textContent = `UID: ${user.uid}`;
+                logoutSection.classList.remove('hidden');
+
+                if (user.isAnonymous) {
+                    // 匿名用戶：顯示升級 + 顯示登入(用於切換)
+                    accountStatusText.textContent = "匿名訪客";
+                    upgradeSection.classList.remove('hidden');
+                    loginSection.classList.remove('hidden'); // Fix: 匿名時仍可登入舊帳號
+                } else {
+                    // 永久用戶：隱藏升級和登入框
+                    accountStatusText.textContent = "永久帳號 (已登入)";
+                    upgradeSection.classList.add('hidden');
+                    loginSection.classList.add('hidden');
+                }
+
                 initListeners();
             } else {
-                // 如果沒有登入，嘗試匿名登入
-                signInAnonymously(auth).catch((error) => {
-                    console.error("匿名登入失敗", error);
-                    document.getElementById('auth-status').textContent = "連線失敗 (請檢查網路)";
-                });
+                // 未登入：嘗試匿名
+                currentUser = null;
+                statusText.textContent = "未登入";
+                accountStatusText.textContent = "未登入";
+                upgradeSection.classList.add('hidden');
+                logoutSection.classList.add('hidden');
+                loginSection.classList.remove('hidden');
+
+                signInAnonymously(auth).catch(err => console.error("Anon Auth Error", err));
             }
         });
 
-        // 初始化資料監聽
-        function initListeners() {
-            if (!currentUser) return;
-
-            // 1. 監聽學生名單
-            const rosterRef = collection(db, `users/${currentUser.uid}/roster`);
-            const qRoster = query(rosterRef, orderBy('createdAt', 'desc')); // 假設有 createdAt，或者預設排序
-            
-            onSnapshot(qRoster, (snapshot) => {
-                const listEl = document.getElementById('roster-list');
-                listEl.innerHTML = '';
-                rosterMap = {}; // 重置快取
-
-                if (snapshot.empty) {
-                    listEl.innerHTML = '<tr><td colspan="3" class="p-8 text-center text-gray-400">目前沒有學生，請新增。</td></tr>';
-                    return;
-                }
-
-                snapshot.forEach(docSnap => {
-                    const student = docSnap.data();
-                    const id = docSnap.id; // 文件 ID 即為學生編號
-                    rosterMap[id] = student.name;
-
-                    const row = document.createElement('tr');
-                    row.className = "border-b hover:bg-gray-50";
-                    row.innerHTML = `
-                        <td class="p-4 font-mono font-bold text-gray-700">${id}</td>
-                        <td class="p-4 font-bold" style="color: var(--dse-dark-blue);">${student.name}</td>
-                        <td class="p-4 text-right">
-                            <button onclick="window.openIdCard('${student.name}', '${id}')" class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-lg text-xs font-bold hover:bg-yellow-200 border border-yellow-300">
-                                顯示證件
-                            </button>
-                            <button onclick="window.deleteStudent('${id}')" class="ml-2 text-red-400 hover:text-red-600 text-xs font-bold">刪除</button>
-                        </td>
-                    `;
-                    listEl.appendChild(row);
-                });
-            });
-
-            // 2. 監聽點名記錄
-            const recordsRef = collection(db, `users/${currentUser.uid}/records`);
-            const qRecords = query(recordsRef, orderBy('timestamp', 'desc'));
-
-            onSnapshot(qRecords, (snapshot) => {
-                const listEl = document.getElementById('records-list');
-                listEl.innerHTML = '';
-
-                if (snapshot.empty) {
-                    listEl.innerHTML = '<tr><td colspan="3" class="p-8 text-center text-gray-400">尚無點名記錄</td></tr>';
-                    return;
-                }
-
-                snapshot.forEach(docSnap => {
-                    const record = docSnap.data();
-                    const time = record.timestamp ? new Date(record.timestamp.toDate()).toLocaleString() : '剛剛';
-                    
-                    const row = document.createElement('tr');
-                    row.className = "border-b hover:bg-gray-50";
-                    row.innerHTML = `
-                        <td class="p-4 text-sm text-gray-500">${time}</td>
-                        <td class="p-4 font-bold text-gray-800">${record.studentName}</td>
-                        <td class="p-4 font-mono text-sm text-gray-500">${record.studentId}</td>
-                    `;
-                    listEl.appendChild(row);
-                });
-            });
-        }
-
-        // --- 3. 掃描器邏輯 ---
-        const video = document.getElementById('video');
-        const canvasElement = document.getElementById('scan-canvas');
-        const canvas = canvasElement.getContext('2d');
-        const overlay = document.getElementById('camera-overlay');
-        let isScanning = true;
-
-        async function startCamera() {
-            if (videoStream) {
-                videoStream.getTracks().forEach(track => track.stop());
-            }
-
-            try {
-                const constraints = {
-                    video: { 
-                        facingMode: cameraFacingMode, // 使用變數控制前後鏡頭
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    }
-                };
-                
-                videoStream = await navigator.mediaDevices.getUserMedia(constraints);
-                video.srcObject = videoStream;
-                video.setAttribute("playsinline", true);
-                await video.play();
-                
-                overlay.classList.add('hidden'); // 隱藏 "啟動中" 遮罩
-                requestAnimationFrame(tick);
-            } catch (err) {
-                console.error("相機錯誤", err);
-                overlay.innerHTML = `<p class="text-center px-4">無法啟動相機。<br>請確認允許瀏覽器使用相機權限。<br><span class="text-xs text-gray-400">${err.name}</span></p>`;
-                overlay.classList.remove('hidden');
-            }
-        }
-
-        // 掃描迴圈
-        function tick() {
-            if (video.readyState === video.HAVE_ENOUGH_DATA && isScanning) {
-                canvasElement.height = video.videoHeight;
-                canvasElement.width = video.videoWidth;
-                
-                // 繪製影像到 Canvas 供 jsQR 分析
-                canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
-                
-                const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
-                
-                // 嘗試識別 QR Code
-                const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                    inversionAttempts: "dontInvert",
-                });
-
-                if (code && code.data) {
-                    handleScanSuccess(code.data);
-                }
-            }
-            requestAnimationFrame(tick);
-        }
-
-        let lastScannedData = null;
-        let lastScanTime = 0;
-
-        async function handleScanSuccess(data) {
-            const now = Date.now();
-            // 防止重複快速掃描 (3秒冷卻)
-            if (data === lastScannedData && now - lastScanTime < 3000) return;
-            
-            lastScannedData = data;
-            lastScanTime = now;
-
-            // 檢查是否為有效學生
-            const studentName = rosterMap[data];
-            const feedbackEl = document.getElementById('scan-feedback');
-
-            if (studentName) {
-                // 1. 顯示成功 UI
-                feedbackEl.className = "mt-4 p-4 rounded-xl bg-green-100 border border-green-300 text-center transition-all transform scale-105";
-                feedbackEl.innerHTML = `
-                    <div class="text-3xl mb-1">✅</div>
-                    <p class="text-green-800 font-black text-lg">${studentName}</p>
-                    <p class="text-green-600 text-sm font-mono">ID: ${data}</p>
-                    <p class="text-green-600 text-xs mt-1">點名成功</p>
-                `;
-
-                // 2. 寫入 Firebase
-                try {
-                    await addDoc(collection(db, `users/${currentUser.uid}/records`), {
-                        studentId: data,
-                        studentName: studentName,
-                        timestamp: serverTimestamp()
-                    });
-                } catch (e) {
-                    console.error("寫入錯誤", e);
-                    alert("資料庫寫入失敗");
-                }
-
-                // 1.5秒後恢復提示
-                setTimeout(() => {
-                    feedbackEl.className = "mt-4 p-4 rounded-xl bg-gray-50 border border-gray-200 text-center transition-all";
-                    feedbackEl.innerHTML = `<p class="text-gray-500 font-medium">請將學生證 QR Code 對準黃色框內</p>`;
-                }, 2000);
-
-            } else {
-                // 無效學生
-                feedbackEl.className = "mt-4 p-4 rounded-xl bg-red-100 border border-red-300 text-center shake";
-                feedbackEl.innerHTML = `
-                    <div class="text-2xl mb-1">❌</div>
-                    <p class="text-red-800 font-bold">無效的學生證</p>
-                    <p class="text-red-600 font-mono text-xs">讀取資料: ${data}</p>
-                `;
-            }
-        }
-
-        // --- 4. 全局功能綁定 (Window Scope) ---
-
-        // 切換 Tab
-        window.switchTab = (tabId) => {
-            // 隱藏所有 View
-            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
-            document.getElementById(`view-${tabId}`).classList.remove('hidden');
-            
-            // 更新按鈕樣式
-            document.querySelectorAll('button[id^="tab-"]').forEach(btn => {
-                btn.style.backgroundColor = '';
-                btn.className = "flex-1 py-2 px-4 rounded-lg text-sm font-bold text-gray-500 hover:bg-gray-100 transition-colors";
-            });
-            const activeBtn = document.getElementById(`tab-${tabId}`);
-            activeBtn.className = "flex-1 py-2 px-4 rounded-lg text-sm font-bold transition-colors text-white";
-            activeBtn.style.backgroundColor = "var(--dse-dark-blue)";
-
-            // 相機控制
-            if (tabId === 'scanner') {
-                isScanning = true;
-                startCamera();
-            } else {
-                isScanning = false;
-                if (videoStream) videoStream.getTracks().forEach(track => track.stop()); // 關閉相機省電
-            }
-        };
-
-        // 切換前後鏡頭
-        window.toggleCamera = () => {
-            cameraFacingMode = (cameraFacingMode === 'environment') ? 'user' : 'environment';
-            startCamera(); // 重啟相機以應用新設定
-        };
-
-        // 新增學生
-        document.getElementById('add-student-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            if (!currentUser) return alert("請先登入");
-
-            const id = document.getElementById('input-id').value.trim();
-            const name = document.getElementById('input-name').value.trim();
-
-            if (!id || !name) return;
-
-            try {
-                // 使用 ID 作為 Doc ID，防止重複
-                await setDoc(doc(db, `users/${currentUser.uid}/roster`, id), {
-                    name: name,
-                    createdAt: serverTimestamp()
-                });
-                document.getElementById('add-student-form').reset();
-                alert(`學生 ${name} 已新增`);
-            } catch (e) {
-                console.error(e);
-                alert("新增失敗");
-            }
-        });
-
-        // 刪除學生
-        window.deleteStudent = async (id) => {
-            if (confirm(`確定刪除 ID: ${id} 嗎？`)) {
-                await deleteDoc(doc(db, `users/${currentUser.uid}/roster`, id));
-            }
-        };
-
-        // 開啟學生證模態框
-        window.openIdCard = (name, id) => {
-            document.getElementById('modal-name').textContent = name;
-            document.getElementById('modal-id').textContent = `ID: ${id}`;
-            document.getElementById('id-card-modal').classList.remove('hidden');
-            
-            // 生成 QR Code
-            const container = document.getElementById('modal-qrcode');
-            container.innerHTML = ''; // 清空舊的
-            
-            new QRCode(container, {
-                text: id,
-                width: 160,
-                height: 160,
-                colorDark : "#000000", // 確保高對比度：黑
-                colorLight : "#ffffff", // 白
-                correctLevel : QRCode.CorrectLevel.H
-            });
-        };
-
-        // 關閉模態框
-        window.closeModal = () => {
-            document.getElementById('id-card-modal').classList.add('hidden');
-        };
-
-        // 匯出 CSV
-        window.exportCSV = () => {
-            const rows = document.querySelectorAll('#records-list tr');
-            if (rows.length === 0 || rows[0].innerText.includes('尚無')) return alert("沒有資料可匯出");
-
-            let csvContent = "\uFEFF時間,學生姓名,學生編號\n"; // 加入 BOM 防止亂碼
-
-            // 從 Firebase 重新抓一次資料最準確，或是直接 parse DOM (這裡為求快 parse DOM)
-            // 更好的做法是遍歷 cached data，但這裡我們簡化
-            // 這裡我們直接用 DOM
-            rows.forEach(row => {
-               const cols = row.querySelectorAll('td');
-               const time = cols[0].innerText;
-               const name = cols[1].innerText;
-               const id = cols[2].innerText;
-               csvContent += `${time},${name},${id}\n`;
-            });
-
-            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-            const link = document.createElement("a");
-            const url = URL.createObjectURL(blob);
-            link.setAttribute("href", url);
-            link.setAttribute("download", "DSE_VICTORY_點名記錄.csv");
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        };
-
-        // 管理員登入
+        // 登入
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const email = document.getElementById('login-email').value;
-            const password = document.getElementById('login-password').value;
-
+            const email = document.getElementById('in-email').value;
+            const password = document.getElementById('in-password').value;
             try {
                 await signInWithEmailAndPassword(auth, email, password);
+                showAlert("成功", "登入成功！資料已同步。");
+                document.getElementById('login-form').reset();
             } catch (error) {
-                // 如果找不到使用者，嘗試註冊
-                if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-                    try {
-                        if(confirm("帳號不存在，是否直接以此帳號密碼註冊？")) {
-                            await createUserWithEmailAndPassword(auth, email, password);
-                        }
-                    } catch (regError) {
-                        alert("註冊失敗: " + regError.message);
-                    }
-                } else {
-                    alert("登入錯誤: " + error.message);
-                }
+                showAlert("登入失敗", error.message);
+            }
+        });
+
+        // 升級
+        document.getElementById('upgrade-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('up-email').value;
+            const password = document.getElementById('up-password').value;
+            const credential = EmailAuthProvider.credential(email, password);
+            try {
+                await linkWithCredential(auth.currentUser, credential);
+                showAlert("成功", "帳號升級成功！");
+                document.getElementById('upgrade-form').reset();
+            } catch (error) {
+                showAlert("錯誤", error.message);
             }
         });
 
         // 登出
         window.handleLogout = () => {
-            signOut(auth);
-            window.location.reload();
+            signOut(auth).then(() => window.location.reload());
+        };
+
+        // --- 資料庫監聽 ---
+        function initListeners() {
+            const rosterRef = collection(db, `users/${currentUser.uid}/roster`);
+            onSnapshot(query(rosterRef, orderBy('createdAt', 'desc')), (snapshot) => {
+                const listEl = document.getElementById('roster-list');
+                listEl.innerHTML = '';
+                rosterMap = {}; 
+                if (snapshot.empty) {
+                    listEl.innerHTML = '<tr><td colspan="3" class="p-8 text-center text-gray-400">請新增學生</td></tr>';
+                    return;
+                }
+                snapshot.forEach(docSnap => {
+                    const s = docSnap.data();
+                    const id = docSnap.id;
+                    rosterMap[id] = s.name;
+                    const row = document.createElement('tr');
+                    row.className = "border-b hover:bg-gray-50";
+                    row.innerHTML = `<td class="p-4 font-mono font-bold text-gray-700">${id}</td><td class="p-4 font-bold" style="color:var(--dse-dark-blue)">${s.name}</td><td class="p-4 text-right"><button onclick="window.openIdCard('${s.name}','${id}')" class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded text-xs font-bold mr-2">證件</button><button onclick="window.deleteStudent('${id}')" class="text-red-400 text-xs font-bold">刪除</button></td>`;
+                    listEl.appendChild(row);
+                });
+            });
+
+            const recordsRef = collection(db, `users/${currentUser.uid}/records`);
+            onSnapshot(query(recordsRef, orderBy('timestamp', 'desc')), (snapshot) => {
+                const listEl = document.getElementById('records-list');
+                listEl.innerHTML = '';
+                if (snapshot.empty) {
+                    listEl.innerHTML = '<tr><td colspan="3" class="p-8 text-center text-gray-400">尚無記錄</td></tr>';
+                    return;
+                }
+                snapshot.forEach(docSnap => {
+                    const r = docSnap.data();
+                    const time = r.timestamp ? new Date(r.timestamp.toDate()).toLocaleString() : '';
+                    const row = document.createElement('tr');
+                    row.className = "border-b hover:bg-gray-50";
+                    row.innerHTML = `<td class="p-4 text-sm text-gray-500">${time}</td><td class="p-4 font-bold text-gray-800">${r.studentName}</td><td class="p-4 font-mono text-sm text-gray-500">${r.studentId}</td>`;
+                    listEl.appendChild(row);
+                });
+            });
         }
 
-        // 預設啟動相機 (如果是在 Scanner tab)
-        startCamera();
+        // --- 掃描器 ---
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('scan-canvas');
+        const ctx = canvas.getContext('2d');
+        const overlay = document.getElementById('camera-loading');
+        const errorEl = document.getElementById('camera-error');
 
+        async function startCamera() {
+            if (videoStream) videoStream.getTracks().forEach(t => t.stop());
+            errorEl.classList.add('hidden');
+            overlay.classList.remove('hidden');
+
+            try {
+                const constraints = { 
+                    video: { 
+                        facingMode: cameraFacingMode,
+                        width: { ideal: 1280 }, height: { ideal: 720 }
+                    } 
+                };
+                videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = videoStream;
+                video.onloadedmetadata = () => {
+                    video.play();
+                    overlay.classList.add('hidden');
+                    scanActive = true;
+                    requestAnimationFrame(tick);
+                };
+            } catch (err) {
+                console.error(err);
+                errorEl.innerHTML = "無法啟動相機。請確認 HTTPS 及權限。";
+                errorEl.classList.remove('hidden');
+                overlay.classList.add('hidden');
+            }
+        }
+
+        function tick() {
+            if (!scanActive) return;
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+                if (code && code.data) handleScanSuccess(code.data);
+            }
+            requestAnimationFrame(tick);
+        }
+
+        let lastScanned = null;
+        let lastTime = 0;
+
+        async function handleScanSuccess(data) {
+            if (data === lastScanned && Date.now() - lastTime < 3000) return;
+            lastScanned = data;
+            lastTime = Date.now();
+
+            const name = rosterMap[data];
+            const feedback = document.getElementById('scan-result-container');
+            
+            if (name) {
+                feedback.className = "mt-4 p-4 rounded-xl bg-green-100 border border-green-300 text-center";
+                feedback.innerHTML = `<div class="text-3xl">✅</div><div class="font-bold text-green-800 text-lg">${name}</div><div class="text-sm text-green-600">${data}</div>`;
+                
+                try {
+                    await addDoc(collection(db, `users/${currentUser.uid}/records`), {
+                        studentId: data, studentName: name, timestamp: serverTimestamp()
+                    });
+                } catch(e) { alert("寫入失敗"); }
+
+                setTimeout(() => {
+                    feedback.className = "mt-4 p-4 rounded-xl bg-gray-50 border border-gray-200 text-center";
+                    feedback.innerHTML = '<p class="text-gray-500 font-medium">請將學生證 QR Code 對準框內</p>';
+                }, 2000);
+            } else {
+                feedback.className = "mt-4 p-4 rounded-xl bg-red-100 border border-red-300 text-center";
+                feedback.innerHTML = `<div class="text-2xl">❌</div><div class="font-bold text-red-800">無效學生證</div><div class="text-xs text-red-600">${data}</div>`;
+            }
+        }
+
+        // --- 全局函式 ---
+        window.switchTab = (id) => {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`view-${id}`).classList.remove('hidden');
+            document.querySelectorAll('button[id^="tab-"]').forEach(btn => {
+                btn.className = "flex-1 py-3 px-4 rounded-lg text-sm font-bold text-gray-500 hover:bg-gray-100 transition-colors";
+                btn.style.backgroundColor = "";
+                btn.style.color = "";
+            });
+            const active = document.getElementById(`tab-${id}`);
+            active.className = "flex-1 py-3 px-4 rounded-lg text-sm font-bold text-white transition-colors";
+            active.style.backgroundColor = "var(--dse-dark-blue)";
+
+            if (id === 'scanner') { scanActive = true; startCamera(); } 
+            else { scanActive = false; if(videoStream) videoStream.getTracks().forEach(t=>t.stop()); }
+        };
+
+        window.toggleCamera = () => {
+            cameraFacingMode = (cameraFacingMode === 'environment') ? 'user' : 'environment';
+            startCamera();
+        };
+
+        window.openIdCard = (name, id) => {
+            document.getElementById('modal-name').textContent = name;
+            document.getElementById('modal-id').textContent = `ID: ${id}`;
+            document.getElementById('id-card-modal').classList.remove('hidden');
+            document.getElementById('modal-qrcode').innerHTML = '';
+            new QRCode(document.getElementById('modal-qrcode'), {
+                text: id, width: 160, height: 160, colorDark: "#000000", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.H
+            });
+        };
+
+        window.closeModal = () => document.getElementById('id-card-modal').classList.add('hidden');
+        
+        window.deleteStudent = async (id) => {
+            if(confirm("確定刪除?")) await deleteDoc(doc(db, `users/${currentUser.uid}/roster`, id));
+        };
+
+        window.exportCSV = () => {
+            const rows = document.querySelectorAll('#records-list tr');
+            if(rows.length===0 || rows[0].innerText.includes('尚無')) return showAlert("提示","無資料");
+            let csv = "\uFEFF時間,姓名,編號\n";
+            rows.forEach(r => {
+                const c = r.querySelectorAll('td');
+                if(c.length===3) csv += `${c[0].innerText},${c[1].innerText},${c[2].innerText}\n`;
+            });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8;"}));
+            link.download = "點名記錄.csv";
+            link.click();
+        };
+
+        document.getElementById('add-student-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('input-id').value.trim();
+            const name = document.getElementById('input-name').value.trim();
+            if(!id || !name) return;
+            try {
+                await setDoc(doc(db, `users/${currentUser.uid}/roster`, id), { name, createdAt: serverTimestamp() });
+                document.getElementById('add-student-form').reset();
+                showAlert("成功", "已新增");
+            } catch(e) { showAlert("錯誤", "新增失敗"); }
+        });
+
+        function showAlert(t, m) {
+            document.getElementById('alert-title').textContent = t;
+            document.getElementById('alert-msg').textContent = m;
+            document.getElementById('alert-modal').classList.remove('hidden');
+        }
+
+        // 啟動
+        window.switchTab('scanner');
     </script>
 </body>
 </html>
