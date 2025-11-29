@@ -64,16 +64,21 @@
                     <h1 class="text-3xl font-serif-tc font-bold text-[#002060]">明門中文</h1>
                     <p class="text-xs text-gray-400 mt-1 tracking-widest">DSE VICTORY</p>
                 </div>
-                <!-- 連線狀態指示燈 -->
-                <div class="flex items-center gap-2">
-                    <span id="status-text" class="text-xs text-gray-400">連線中...</span>
-                    <div id="auth-indicator" class="h-3 w-3 rounded-full bg-gray-300 animate-pulse"></div>
+                <!-- 連線狀態指示燈與登入狀態 -->
+                <div class="flex flex-col items-end gap-1">
+                    <div class="flex items-center gap-2">
+                        <span id="status-text" class="text-xs text-gray-400">登入中...</span>
+                        <div id="auth-indicator" class="h-3 w-3 rounded-full bg-gray-300 animate-pulse"></div>
+                    </div>
+                    <div id="auth-actions">
+                        <!-- 登入/登出按鈕會在這裡動態顯示 -->
+                    </div>
                 </div>
             </div>
         </header>
 
         <!-- 切換分頁 -->
-        <div class="flex p-1 mb-6 bg-gray-200 rounded-xl">
+        <div id="main-tabs" class="hidden flex p-1 mb-6 bg-gray-200 rounded-xl">
             <button onclick="switchTab('scanner')" id="tab-scanner" class="flex-1 py-3 text-sm font-bold rounded-lg transition-all text-[#002060] bg-white shadow">
                 📷 掃描
             </button>
@@ -137,7 +142,7 @@
             <!-- 列表區塊 -->
             <div class="space-y-3" id="roster-list">
                 <!-- 動態生成學生卡片 -->
-                <div class="text-center py-10 text-gray-400">載入中...</div>
+                <div class="text-center py-10 text-gray-400">請先登入以載入名單...</div>
             </div>
         </div>
 
@@ -183,6 +188,35 @@
         </div>
     </div>
 
+    <!-- 登入/註冊 模態框 (新增) -->
+    <div id="auth-modal" class="hidden fixed inset-0 z-[70] flex items-center justify-center p-4 bg-[#002060]/90 backdrop-blur-sm">
+        <div class="bg-white rounded-xl p-8 shadow-2xl max-w-md w-full">
+            <h3 class="font-serif-tc font-bold text-2xl text-[#002060] mb-4 text-center" id="auth-title">登入系統</h3>
+            <p class="text-sm text-gray-500 mb-6 text-center">請使用您的教師帳號登入或註冊。只有登入才能存取資料庫。</p>
+            <form id="auth-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">電子郵件</label>
+                    <input type="email" id="auth-email" required class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-[#002060] focus:border-[#002060] outline-none" placeholder="your@email.com">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">密碼</label>
+                    <input type="password" id="auth-password" required class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-[#002060] focus:border-[#002060] outline-none" placeholder="至少六位數">
+                </div>
+                <p id="auth-error-message" class="text-red-500 text-sm hidden"></p>
+                
+                <div class="flex gap-4">
+                    <button type="button" onclick="handleAuth(true)" id="register-btn" class="flex-1 py-3 bg-[#D4AF37] text-[#002060] font-bold rounded-lg shadow active:scale-95 transition-all">
+                        註冊新帳號
+                    </button>
+                    <button type="button" onclick="handleAuth(false)" id="login-btn" class="flex-1 py-3 bg-[#002060] text-white font-bold rounded-lg shadow active:scale-95 transition-all">
+                        登入
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
     <!-- 隱藏的 QR Code 生成區 (用於 Canvas 繪製) -->
     <div id="hidden-qr" class="hidden"></div>
 
@@ -197,20 +231,28 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // 匯入 Email/Password 相關的函數
+        import { 
+            getAuth, 
+            onAuthStateChanged, 
+            signOut,
+            signInWithEmailAndPassword,
+            createUserWithEmailAndPassword
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, addDoc, deleteDoc, onSnapshot, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // =======================================================
         // 【重要】請將下方的 firebaseConfig 物件替換為您自己的設定
         // =======================================================
         const firebaseConfig = {
-  apiKey: "AIzaSyAFM-0Hi6J1dtWltpCsGGObBxWtO2ZRRpY",
-  authDomain: "dsevictory-attendance-system.firebaseapp.com",
-  projectId: "dsevictory-attendance-system",
-  storageBucket: "dsevictory-attendance-system.firebasestorage.app",
-  messagingSenderId: "796565425082",
-  appId: "1:796565425082:web:08babee5be08c0ffdc2b83",
-  measurementId: "G-4BCRYC7KKT"
+            // 請在此處貼上您的 Firebase 設定代碼
+            // 例如:
+            // apiKey: "AIzaSyD...",
+            // authDomain: "your-project.firebaseapp.com",
+            // projectId: "your-project-id",
+            // storageBucket: "your-project.appspot.com",
+            // messagingSenderId: "123456789",
+            // appId: "1:123456789:web:abcdef"
         };
         // =======================================================
 
@@ -218,6 +260,51 @@
         
         let db, auth, userId;
         let rosterMap = {}; 
+
+        // --- 登入/註冊 處理 ---
+        window.handleAuth = async (isRegister) => {
+            const email = document.getElementById('auth-email').value;
+            const password = document.getElementById('auth-password').value;
+            const errorElement = document.getElementById('auth-error-message');
+            errorElement.classList.add('hidden');
+            
+            if (!email || password.length < 6) {
+                errorElement.textContent = "請輸入有效的電郵地址和至少六位數的密碼。";
+                errorElement.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                if (isRegister) {
+                    // 註冊
+                    await createUserWithEmailAndPassword(auth, email, password);
+                    showModal('成功', '註冊成功！您已自動登入。');
+                } else {
+                    // 登入
+                    await signInWithEmailAndPassword(auth, email, password);
+                    showModal('成功', '登入成功！');
+                }
+                document.getElementById('auth-modal').classList.add('hidden');
+            } catch (error) {
+                console.error(error);
+                let msg = '登入/註冊失敗。';
+                if (error.code === 'auth/email-already-in-use') {
+                    msg = '此電郵已被註冊，請直接登入或使用其他電郵。';
+                } else if (error.code === 'auth/invalid-credential') {
+                    msg = '電郵或密碼錯誤。';
+                } else if (error.code === 'auth/weak-password') {
+                    msg = '密碼強度太弱，請使用至少六位數。';
+                }
+                errorElement.textContent = msg;
+                errorElement.classList.remove('hidden');
+            }
+        }
+
+        window.handleSignOut = async () => {
+            if (!confirm('確定要登出嗎？登出後將無法存取資料。')) return;
+            await signOut(auth);
+        }
+
 
         // --- 初始化 ---
         async function initApp() {
@@ -233,23 +320,43 @@
             onAuthStateChanged(auth, user => {
                 const indicator = document.getElementById('auth-indicator');
                 const statusText = document.getElementById('status-text');
+                const authActions = document.getElementById('auth-actions');
+                const mainTabs = document.getElementById('main-tabs');
+                
+                // 清除之前的監聽器和狀態
+                userId = null;
+                authActions.innerHTML = '';
+                mainTabs.classList.add('hidden');
+
                 if (user) {
+                    // 已登入
                     userId = user.uid;
-                    indicator.classList.remove('bg-gray-300', 'animate-pulse');
+                    indicator.classList.remove('bg-gray-300', 'animate-pulse', 'bg-red-500');
                     indicator.classList.add('bg-green-500');
-                    statusText.textContent = "已連線";
+                    statusText.textContent = user.email || "已登入";
                     statusText.classList.add('text-green-600');
-                    startListeners();
+                    authActions.innerHTML = `<button onclick="handleSignOut()" class="mt-1 px-3 py-1 bg-red-100 text-red-600 text-xs font-bold rounded-lg hover:bg-red-200">登出</button>`;
+                    mainTabs.classList.remove('hidden');
+                    document.getElementById('auth-modal').classList.add('hidden');
+                    startListeners(); // 登入後才開始監聽資料庫
                 } else {
+                    // 未登入
+                    indicator.classList.remove('bg-gray-300', 'animate-pulse', 'bg-green-500');
                     indicator.classList.add('bg-red-500');
-                    statusText.textContent = "未連線";
-                    // 自動匿名登入
-                    signInAnonymously(auth).catch(e => showModal('登入失敗', e.message));
+                    statusText.textContent = "未登入";
+                    statusText.classList.add('text-red-600');
+                    authActions.innerHTML = `<button onclick="document.getElementById('auth-modal').classList.remove('hidden')" class="mt-1 px-3 py-1 bg-[#002060] text-white text-xs font-bold rounded-lg hover:bg-blue-900">登入</button>`;
+                    document.getElementById('roster-list').innerHTML = '<div class="text-center py-10 text-gray-400">請先登入以載入名單...</div>';
+                    document.getElementById('records-tbody').innerHTML = '<tr><td colspan="3" class="p-6 text-center text-gray-400">請先登入</td></tr>';
+                    document.getElementById('auth-modal').classList.remove('hidden'); // 顯示登入框
                 }
             });
         }
 
         function startListeners() {
+            // 確保只在登入狀態下執行
+            if (!userId) return; 
+
             // 監聽名單
             onSnapshot(collection(db, `artifacts/${appId}/users/${userId}/roster`), snapshot => {
                 const students = [];
@@ -324,7 +431,7 @@
         // --- 業務邏輯 ---
         document.getElementById('add-student-form').addEventListener('submit', async e => {
             e.preventDefault();
-            if (!userId) return showModal('錯誤', '未連線');
+            if (!userId) return showModal('錯誤', '請先登入系統');
             const id = document.getElementById('studentId').value.trim();
             const name = document.getElementById('studentName').value.trim();
             const phone = document.getElementById('studentPhone').value.trim();
@@ -332,7 +439,7 @@
                 await setDoc(doc(db, `artifacts/${appId}/users/${userId}/roster`, id), { studentId: id, name, phone });
                 showModal('成功', `已新增：${name}`);
                 e.target.reset();
-            } catch (err) { console.error(err); }
+            } catch (err) { console.error(err); showModal('錯誤', `儲存失敗: ${err.message}`); }
         });
 
         window.delStudent = async (id) => {
@@ -453,7 +560,8 @@
         window.startCamera = async () => {
             document.getElementById('camera-error').classList.add('hidden');
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                // 使用前置鏡頭
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
                 video.srcObject = stream;
                 video.setAttribute("playsinline", true);
                 await video.play();
@@ -482,7 +590,8 @@
                 
                 if (code) {
                     const now = Date.now();
-                    if (code.data !== lastCode || (now - lastTime > 3000)) {
+                    // 3秒內同一 QR Code 不重複點名
+                    if (code.data !== lastCode || (now - lastTime > 3000)) { 
                         lastCode = code.data;
                         lastTime = now;
                         handleScan(code.data);
@@ -496,7 +605,11 @@
             const feedback = document.getElementById('scan-feedback');
             if (!rosterMap[code]) {
                 feedback.textContent = `❌ 無效代碼: ${code}`;
-                feedback.classList.add('bg-red-100', 'text-red-600');
+                feedback.className = "text-center p-3 rounded-lg bg-red-100 text-red-700 text-sm font-medium";
+                setTimeout(() => {
+                    feedback.textContent = "等待掃描...";
+                    feedback.className = "text-center p-3 rounded-lg bg-blue-50 text-[#002060] text-sm font-medium";
+                }, 2000);
                 return;
             }
             const s = rosterMap[code];
@@ -512,7 +625,7 @@
         }
 
         window.exportToCSV = async () => {
-            if (!userId) return;
+            if (!userId) return showModal('錯誤', '請先登入才能匯出');
             const snap = await getDocs(collection(db, `artifacts/${appId}/users/${userId}/attendance_records`));
             let csv = "\uFEFF時間,日期,學號,姓名\n";
             const recs = [];
@@ -537,7 +650,7 @@
             activeBtn.classList.add('bg-white', 'shadow', 'text-[#002060]');
             activeBtn.classList.remove('text-gray-500');
 
-            if (tab === 'scanner') startCamera(); else stopCamera();
+            if (tab === 'scanner' && userId) startCamera(); else stopCamera();
         };
         
         window.showModal = (t, m) => {
